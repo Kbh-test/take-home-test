@@ -47,10 +47,10 @@ How to submit
 
 ## Running locally
 
-Start Postgres 18 (Docker) and wait until it's healthy:
+Set up the database before starting the app. This creates `.env` if missing, starts Postgres 18 (Docker) and applies migrations:
 
 ```bash
-docker compose up -d --wait
+npm run db:setup
 ```
 
 Connect:
@@ -58,7 +58,5 @@ Connect:
 ```bash
 docker compose exec db psql -U postgres -d take_home
 ```
-
-The app connects with `DATABASE_URL`, which defaults to `postgres://postgres:postgres@127.0.0.1:5432/take_home`. Override `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` or `POSTGRES_PORT` to change it. Postgres only listens on `127.0.0.1`.
 
 Stop it with `docker compose down`. Add `-v` to delete the data.

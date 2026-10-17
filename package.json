@@ -2,11 +2,13 @@
   "name": "take-home-test",
   "version": "1.0.0",
   "description": "Take home test project",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "build": "tsc && cp -R src/db/migrations dist/src/db/",
+    "start": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
+    "db:setup": "([ -f .env ] || cp .env.example .env) && docker compose up -d --wait && npm run db:migrate",
+    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest"
   },
   "keywords": [],
