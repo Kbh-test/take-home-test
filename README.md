@@ -44,3 +44,21 @@ How to submit
 * The email sent to you has a unique submission link, which will take you to a submission portal
 * Please submit on the portal: a link to your repository and a link to a 5 minute (max) loom which explains your code and some of your design decisions
 * If possible, please submit within 4-5 days of receiving the task
+
+## Running locally
+
+Start Postgres 18 (Docker) and wait until it's healthy:
+
+```bash
+docker compose up -d --wait
+```
+
+Connect:
+
+```bash
+docker compose exec db psql -U postgres -d take_home
+```
+
+The app connects with `DATABASE_URL`, which defaults to `postgres://postgres:postgres@127.0.0.1:5432/take_home`. Override `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` or `POSTGRES_PORT` to change it. Postgres only listens on `127.0.0.1`.
+
+Stop it with `docker compose down`. Add `-v` to delete the data.
