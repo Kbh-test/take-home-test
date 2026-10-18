@@ -15,5 +15,7 @@ export async function deliverToFormBot(
 		throw new JobError("Transformed form not found");
 	}
 
-	await callProvider("FORM-BOT", (signal) => deliver({ idempotencyKey: inboundFormId, form }, signal));
+	await callProvider("FORM-BOT", (signal) =>
+		deliver({ idempotencyKey: inboundFormId, form }, signal),
+	);
 }

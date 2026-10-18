@@ -11,7 +11,7 @@ import { sendFormEmail } from "../src/jobs/send_email";
 import type { deliverForm } from "../src/providers/formbot";
 import type { lookupPostcode } from "../src/providers/idealpostcodes";
 import type { sendEmail } from "../src/providers/sendgrid";
-import type { JobType } from "../src/types";
+import type { FormStatus, JobStatus, JobType } from "../src/types";
 import type { Worker } from "../src/worker/types";
 import { startWorker } from "../src/worker/worker";
 import { payloadWith } from "./fixtures/form";
@@ -19,13 +19,13 @@ import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
 type JobState = {
 	type: JobType;
-	status: string;
+	status: JobStatus;
 	attempts: number;
 	last_error: string | null;
 };
 
 type FormState = {
-	status: string;
+	status: FormStatus;
 	tickets: number;
 	jobs: JobState[];
 };
@@ -38,7 +38,12 @@ const allJobsDone = (state: FormState, count: number) =>
 	state.jobs.length === count && state.jobs.every((job) => job.status === "done");
 
 const withEmailFromWorkEmail = (payload: unknown): unknown => {
-	if (typeof payload !== "object" || payload === null || "email" in payload || !("work_email" in payload)) {
+	if (
+		typeof payload !== "object" ||
+		payload === null ||
+		"email" in payload ||
+		!("work_email" in payload)
+	) {
 		return payload;
 	}
 
@@ -97,7 +102,7 @@ describe("integration scenarios", () => {
 	};
 
 	const formState = async (formId: string): Promise<FormState> => {
-		const form = await pool.query<{ status: string; tickets: number }>(
+		const form = await pool.query<{ status: FormStatus; tickets: number }>(
 			`SELECT status, (SELECT count(*)::int FROM dead_letters WHERE inbound_form_id = $1) AS tickets
 			FROM inbound_forms WHERE id = $1`,
 			[formId],

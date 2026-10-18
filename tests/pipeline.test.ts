@@ -8,11 +8,12 @@ import { sendFormEmail } from "../src/jobs/send_email";
 import type { deliverForm } from "../src/providers/formbot";
 import type { lookupPostcode } from "../src/providers/idealpostcodes";
 import type { sendEmail } from "../src/providers/sendgrid";
+import type { FormStatus, JobStatus, JobType } from "../src/types";
 import { startWorker } from "../src/worker/worker";
 import { payloadWith, transformedWith } from "./fixtures/form";
 import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
-type JobRow = { type: string; status: string; last_error: string | null };
+type JobRow = { type: JobType; status: JobStatus; last_error: string | null };
 
 const coordinates = { latitude: -5.05, longitude: 50.05 };
 
@@ -77,7 +78,7 @@ describe("pipeline", () => {
 		cleanup.track(worker!, (w) => w.stop());
 
 		const jobs = await waitForJobsDone(formId);
-		const { rows: forms } = await pool.query<{ status: string }>(
+		const { rows: forms } = await pool.query<{ status: FormStatus }>(
 			"SELECT status FROM inbound_forms WHERE id = $1",
 			[formId],
 		);

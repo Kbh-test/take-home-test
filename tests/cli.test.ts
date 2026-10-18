@@ -12,7 +12,7 @@ import { payloadWith } from "./fixtures/form";
 import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
 type JobRow = {
-	status: string;
+	status: JobStatus;
 	attempts: number;
 	run_after: Date;
 	locked_at: Date | null;
@@ -125,7 +125,7 @@ describe("review ticket CLI", () => {
 
 	const formOf = async (formId: string) => {
 		const { rows } = await pool.query<{
-			status: string;
+			status: FormStatus;
 			application_reference: string | null;
 			payload: unknown;
 		}>("SELECT status, application_reference, payload FROM inbound_forms WHERE id = $1", [formId]);

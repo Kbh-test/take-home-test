@@ -51,7 +51,9 @@ export async function processForm(
 	}
 
 	const { form } = result;
-	const { body: coordinates } = await callProvider("Geocoder", (signal) => geocode(form.postcode, signal));
+	const { body: coordinates } = await callProvider("Geocoder", (signal) =>
+		geocode(form.postcode, signal),
+	);
 
 	if (!coordinates) {
 		throw new JobError("Geocoder returned no coordinates");

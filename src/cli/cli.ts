@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import type { Pool } from "pg";
 
 import { createPool } from "../db/pool";
+import { errorMessage } from "../helpers";
 import type { OpenTicket } from "../types";
 import { closeTicket, listTickets, requeueTicket } from "./commands";
 
@@ -30,7 +31,12 @@ function parseCommand(args: string[]): Command {
 	const confirmNotDelivered = values["confirm-not-delivered"];
 	const { note } = values;
 
-	if (name === "list" && positionals.length === 1 && confirmNotDelivered === undefined && note === undefined) {
+	if (
+		name === "list" &&
+		positionals.length === 1 &&
+		confirmNotDelivered === undefined &&
+		note === undefined
+	) {
 		return { name };
 	}
 
@@ -94,6 +100,6 @@ async function main(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
-	console.error(error instanceof Error ? error.message : String(error));
+	console.error(errorMessage(error));
 	process.exitCode = 1;
 });

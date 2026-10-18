@@ -4,13 +4,13 @@ import type { Pool } from "pg";
 
 import { claimJob, completeJob, recoverJobs } from "../src/db/jobs";
 import { callProvider, JobError } from "../src/jobs/provider";
-import type { Job, JobType } from "../src/types";
+import type { Job, JobStatus, JobType } from "../src/types";
 import type { JobHandler, Worker } from "../src/worker/types";
 import { MAX_ATTEMPTS, startWorker } from "../src/worker/worker";
 import { createCleanup, createMigratedPool } from "./helpers/db";
 
 type JobRow = {
-	status: string;
+	status: JobStatus;
 	attempts: number;
 	last_error: string | null;
 	locked_at: Date | null;
@@ -92,7 +92,7 @@ describe("worker", () => {
 		throw new Error(`Job ${jobId} never reached the expected state`);
 	};
 
-	const waitForStatus = (jobId: string, status: string) =>
+	const waitForStatus = (jobId: string, status: JobStatus) =>
 		waitForJob(jobId, (row) => row.status === status);
 
 	const terminateWorkerLock = async () => {

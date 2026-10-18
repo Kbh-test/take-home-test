@@ -6,6 +6,7 @@ import { ingestForm } from "../src/ingest/ingest";
 import { processForm } from "../src/jobs/process_form";
 import { JobError } from "../src/jobs/provider";
 import type { lookupPostcode } from "../src/providers/idealpostcodes";
+import type { FormStatus } from "../src/types";
 import { otherExamples, payloadWith, transformedWith } from "./fixtures/form";
 import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
@@ -41,8 +42,8 @@ describe("processForm", () => {
 		return { forms: forms.rows, jobs: jobs.rows, tickets: tickets.rows, transformed: transformed.rows };
 	};
 
-	const formStatus = async (formId: string): Promise<string> => {
-		const { rows } = await pool.query<{ status: string }>(
+	const formStatus = async (formId: string): Promise<FormStatus> => {
+		const { rows } = await pool.query<{ status: FormStatus }>(
 			"SELECT status FROM inbound_forms WHERE id = $1",
 			[formId],
 		);

@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import request from "supertest";
 
 import { createApp } from "../src/app";
+import type { FormStatus } from "../src/types";
 import { payloadWith } from "./fixtures/form";
 import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
@@ -10,7 +11,7 @@ type StoredForm = {
 	id: string;
 	application_reference: string | null;
 	payload: unknown;
-	status: string;
+	status: FormStatus;
 	received_count: number;
 };
 
