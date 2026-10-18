@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 
 type RetryTicketFormProps = {
 	ticketId: string;
@@ -14,7 +14,7 @@ export function RetryTicketForm({ ticketId, jobType, onRequeued }: RetryTicketFo
 	const [error, setError] = useState<string | null>(null);
 	const needsDeliveryCheck = jobType === "deliver_formbot";
 
-	const requeue = async (event: FormEvent<HTMLFormElement>) => {
+	const requeue = async (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (!note.trim() || (needsDeliveryCheck && !confirmNotDelivered)) return;
 

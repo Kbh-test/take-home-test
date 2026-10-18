@@ -36,18 +36,18 @@ const handleBodyErrors: ErrorRequestHandler = (error, _req, res, next) => {
 	next(error);
 };
 
-const renderPage = (renderComponent: JSX.Element, script: string) => (
+const renderPage = (renderComponent: JSX.Element, asset: string, title: string) => (
 	`
 	<!doctype html>
 		<html lang="en">
 		<head>
 		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/home.css">
-		<title>Healthtech-1 Registration API</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/${asset}.css">
+		<title>${title}</title>
 		</head>
 		<body>
 			<div id="root">${renderToString(renderComponent)}</div>
-			<script defer src="/assets/${script}"></script>
+			<script defer src="/assets/${asset}.js"></script>
 		</body>
 	</html>`
 )
@@ -59,11 +59,11 @@ export function createApp(pool: Pool) {
 	app.use("/assets", express.static(existsSync(localAssets) ? localAssets : builtAssets));
 
 	app.get("/", (_req, res) => {
-		res.type("html").send(renderPage(<HomePage />, "home.js"));
+		res.type("html").send(renderPage(<HomePage />, "home", "Healthtech-1 Registration API"));
 	});
 
 	app.get("/workers", (_req, res) => {
-		res.type("html").send(renderPage(<WorkersPage />, "workers.js"));
+		res.type("html").send(renderPage(<WorkersPage />, "workers", "Work queue · Healthtech-1"));
 	});
 	
 	app.get("/api/requests", async (_req, res) => {
