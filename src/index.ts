@@ -1,22 +1,21 @@
-import type { Pool } from "pg";
-
-import { createApp } from "./app";
 import { createPool } from "./db/pool";
+import { startService } from "./server";
 
 const PORT = process.env.PORT || 3000;
 
-let pool: Pool;
-
 try {
-	pool = createPool();
+	const service = startService({ pool: createPool(), port: PORT });
+
+	process.on("SIGTERM", service.shutdown);
+	process.on("SIGINT", service.shutdown);
+
+	void service.shutdownComplete.then((code) => {
+		process.exitCode = code;
+	});
 } catch (error) {
 	console.error(
 		"Startup failed:",
 		error instanceof Error ? error.message : error,
 	);
-	process.exit(1);
+	process.exitCode = 1;
 }
-
-createApp(pool).listen(PORT, () => {
-	console.log(`Server is running on http://localhost:${PORT}`);
-});
