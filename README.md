@@ -26,6 +26,8 @@ npm run dev                  # watch mode
 npm run build && npm start   # compiled
 ```
 
+Checks: npm run typecheck and npm run lint (both run in CI).
+
 Tests: see [tests/README.md](tests/README.md) for how to run them and how the tests cover each resilience scenario.
 
 Connect:
