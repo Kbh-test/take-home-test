@@ -29,3 +29,13 @@ export const calendarDateToUtc = (value: string): Date =>
 export function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
+
+export function readPort(value = "3000"): number {
+	const port = Number(value);
+
+	if (!Number.isInteger(port) || port < 1 || port > 65535) {
+		throw new Error("PORT must be an integer between 1 and 65535");
+	}
+
+	return port;
+}

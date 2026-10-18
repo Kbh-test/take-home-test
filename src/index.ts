@@ -1,17 +1,16 @@
 import { databaseUrl } from "./db/config";
 import { createPool } from "./db/pool";
-import { errorMessage } from "./helpers";
+import { errorMessage, readPort } from "./helpers";
 import { run } from "./run";
 
-const PORT = process.env.PORT || 3000;
-
 try {
+	const port = readPort(process.env.PORT);
 	const connectionString = databaseUrl();
 
 	run({
 		pool: createPool(connectionString),
 		connectionString,
-		port: PORT,
+		port,
 		exit: (code) => process.exit(code),
 		signals: process,
 	});
