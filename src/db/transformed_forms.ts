@@ -1,7 +1,9 @@
-import type { Pool } from "pg";
+import type { ClientBase, Pool } from "pg";
 
 import type { TransformedFormSchema } from "../forms/schemas/transformed_schema";
 import { calendarDateToUtc } from "../helpers";
+import type { Coordinates } from "../providers/types";
+import type { MappedForm } from "../types";
 
 type TransformedFormRow = {
 	application_reference: string;
@@ -58,4 +60,28 @@ export async function findTransformedForm(
 		latitude: row.latitude,
 		longitude: row.longitude,
 	};
+}
+
+export async function insertTransformedForm(
+	client: ClientBase,
+	inboundFormId: string,
+	form: MappedForm,
+	coordinates: Coordinates,
+): Promise<void> {
+	await client.query(
+		`INSERT INTO transformed_forms (
+			inbound_form_id, application_reference, session_id, first_name, last_name,
+			email, gender, date_of_birth, phone_number, mobile_number,
+			address_line_1, address_line_2, address_line_3, postcode, country,
+			latitude, longitude
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		[
+			inboundFormId, form.applicationReference, form.sessionId,
+			form.firstName, form.lastName, form.email, form.gender,
+			form.dateOfBirth.toISOString().slice(0, 10), form.phoneNumber ?? null,
+			form.mobileNumber, form.addressLine1, form.addressLine2,
+			form.addressLine3 ?? null, form.postcode, form.country,
+			coordinates.latitude, coordinates.longitude,
+		],
+	);
 }
