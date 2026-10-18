@@ -4,9 +4,11 @@
   "description": "Take home test project",
   "main": "dist/src/index.js",
   "scripts": {
-    "build": "tsc && cp -R src/db/migrations dist/src/db/",
+    "build": "tsc && cp -R src/db/migrations dist/src/db/ && npm run assets",
+    "assets": "node scripts/build-assets.mjs",
     "start": "node --env-file-if-exists=.env dist/src/index.js",
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "predev": "npm run assets",
     "db:setup": "([ -f .env ] || cp .env.example .env) && docker compose up -d --wait && npm run db:migrate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "cli": "tsx --env-file-if-exists=.env src/cli/cli.ts",
@@ -22,7 +24,10 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/supertest": "^6.0.0",
+    "esbuild": "^0.28.2",
     "jest": "^30.5.2",
     "supertest": "^7.0.0",
     "ts-jest": "^29.4.15",
@@ -32,6 +37,8 @@
   "dependencies": {
     "arktype": "2.2.8",
     "express": "^4.22.3",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
