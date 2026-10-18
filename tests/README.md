@@ -48,7 +48,7 @@ Database-backed tests use throwaway `test_<uuid>` databases. The tests themselve
 | [process_form.test.ts](process_form.test.ts) | `processForm`: transform, geocode, queue deliveries, block invalid forms, re-runs, rollback. |
 | [pipeline.test.ts](pipeline.test.ts) | End to end: ingest, process, email and FORM-BOT delivery with a real worker. |
 | [scenarios.test.ts](scenarios.test.ts) | Integration: schema-drift replay and provider retries through the full pipeline. |
-| [cli.test.ts](cli.test.ts) | Review ticket CLI: list (including the reason-code column), requeue and close tickets, and the allowed status transitions. |
+| [cli.test.ts](cli.test.ts) | Review ticket CLI: labeled list columns, requeue and close tickets, and the allowed status transitions. |
 | [config.test.ts](config.test.ts) | Attempt-limit defaults, positive integers and rejection of invalid environment values. |
 | [server.test.ts](server.test.ts) | `startService`: startup and worker limit wiring, concurrent graceful stop and failure reporting for the API and worker. |
 | [run.test.ts](run.test.ts) | `run`: signal handling, forced exit, pool cleanup and exit codes. |

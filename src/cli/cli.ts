@@ -86,6 +86,7 @@ function formatTicket(ticket: OpenTicket): string {
 async function run(pool: Pool, command: Command): Promise<void> {
 	switch (command.name) {
 		case "list":
+			console.log("TICKET ID\tCREATED AT\tFORM ID\tJOB TYPE\tREASON CODE\tREASON");
 			for (const ticket of await listTickets(pool)) {
 				console.log(formatTicket(ticket));
 			}

@@ -232,6 +232,7 @@ describe("review ticket CLI", () => {
 		});
 
 		expect(stdout.trimEnd().split("\n").map((line) => line.split("\t"))).toEqual([
+			["TICKET ID", "CREATED AT", "FORM ID", "JOB TYPE", "REASON CODE", "REASON"],
 			[
 				missing.ticketId,
 				expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
