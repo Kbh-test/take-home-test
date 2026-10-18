@@ -27,6 +27,10 @@ npm run dev                  # watch mode
 npm run build && npm start   # compiled
 ```
 
+## Recovering a FORM-BOT delivery
+
+`npm run cli -- requeue <id> --confirm-not-delivered --note "<what you checked>"`
+
 Checks: npm run typecheck and npm run lint (both run in CI).
 
 Tests: see [tests/README.md](tests/README.md) for how to run them and what scenarios are covered.

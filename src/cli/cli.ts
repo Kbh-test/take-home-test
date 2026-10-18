@@ -8,17 +8,17 @@ import { closeTicket, listTickets, requeueTicket } from "./commands";
 
 type Command =
 	| { name: "list" }
-	| { name: "requeue"; ticketId: string; confirmNotDelivered: boolean }
+	| { name: "requeue"; ticketId: string; confirmNotDelivered: boolean; note?: string }
 	| { name: "close"; ticketId: string; note: string };
 
 const USAGE = `usage:
 	npm run cli -- list
-	npm run cli -- requeue <ticketId> [--confirm-not-delivered]
+	npm run cli -- requeue <ticketId> [--note "<text>"] [--confirm-not-delivered]
 	npm run cli -- close <ticketId> --note "<text>"`;
 
 const TICKET_ID = /^[1-9][0-9]*$/;
 
-function parseCommand(args: string[]): Command {
+export function parseCommand(args: string[]): Command {
 	const { values, positionals } = parseArgs({
 		args,
 		allowPositionals: true,
@@ -48,12 +48,25 @@ function parseCommand(args: string[]): Command {
 		throw new Error(`ticket id must be a positive integer, got "${ticketId}"`);
 	}
 
-	if (name === "requeue" && note === undefined) {
-		return { name, ticketId, confirmNotDelivered: confirmNotDelivered ?? false };
+	if (name === "requeue" && (note === undefined || note.trim())) {
+		return {
+			name,
+			ticketId,
+			confirmNotDelivered: confirmNotDelivered ?? false,
+			...(note === undefined ? {} : { note: note.trim() }),
+		};
 	}
 
-	if (name === "close" && note !== undefined && confirmNotDelivered === undefined) {
-		return { name, ticketId, note };
+	if (name === "close" && note?.trim() && confirmNotDelivered === undefined) {
+		return { name, ticketId, note: note.trim() };
+	}
+
+	if (name === "requeue" && note !== undefined && !note.trim()) {
+		throw new Error("requeue needs a non-blank --note");
+	}
+
+	if (name === "close" && note !== undefined && !note.trim()) {
+		throw new Error("close needs a non-blank --note");
 	}
 
 	throw new Error(USAGE);
@@ -80,6 +93,7 @@ async function run(pool: Pool, command: Command): Promise<void> {
 		case "requeue":
 			await requeueTicket(pool, command.ticketId, {
 				confirmNotDelivered: command.confirmNotDelivered,
+				note: command.note,
 			});
 			console.log(`ticket ${command.ticketId} requeued`);
 			return;
@@ -100,7 +114,9 @@ async function main(args: string[]): Promise<void> {
 	}
 }
 
-main(process.argv.slice(2)).catch((error: unknown) => {
-	console.error(errorMessage(error));
-	process.exitCode = 1;
-});
+if (require.main === module) {
+	main(process.argv.slice(2)).catch((error: unknown) => {
+		console.error(errorMessage(error));
+		process.exitCode = 1;
+	});
+}

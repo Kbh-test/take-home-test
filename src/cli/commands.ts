@@ -13,8 +13,14 @@ export { listOpenTickets as listTickets } from "../db/tickets";
 export async function requeueTicket(
 	pool: Pool,
 	ticketId: string,
-	options: { confirmNotDelivered?: boolean } = {},
+	options: { confirmNotDelivered?: boolean; note?: string } = {},
 ): Promise<void> {
+	const note = options.note?.trim();
+
+	if (options.note !== undefined && !note) {
+		throw new Error("requeue needs a non-blank --note");
+	}
+
 	const resolvedBy = userInfo().username;
 
 	await withTransaction(pool, async (client) => {
@@ -26,7 +32,7 @@ export async function requeueTicket(
 			await requeueForm(client, ticket.formId);
 		}
 
-		await resolve(client, ticketId, resolvedBy, "requeued");
+		await resolve(client, ticketId, resolvedBy, "requeued", note ?? null);
 	});
 }
 
