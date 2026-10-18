@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-import type { JobType } from "../types";
+import type { JobType, RetryLimits } from "../types";
 
 export type JobHandler = (pool: Pool, inboundFormId: string) => Promise<void>;
 
@@ -8,6 +8,7 @@ export type WorkerOptions = {
 	pool: Pool;
 	connectionString: string;
 	handlers: Record<JobType, JobHandler>;
+	maxAttempts?: RetryLimits;
 	pollIntervalMs?: number;
 	retryDelayMs?: (attempts: number) => number;
 };

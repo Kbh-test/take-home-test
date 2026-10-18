@@ -4,18 +4,18 @@ import { Client } from "pg";
 import { claimJob, completeJob, killJob, recoverJobs, retryJob } from "../db/jobs";
 import { WORKER_LOCK_ID } from "../db/locks";
 import { DB_TIMEOUTS } from "../db/pool";
-import { errorMessage } from "../helpers";
+import { DEFAULT_ATTEMPT_LIMIT, errorMessage } from "../helpers";
 import { JobError } from "../jobs/provider";
 import type { Job, JobType } from "../types";
 import type { Worker, WorkerOptions } from "./types";
 
 export const MAX_ATTEMPTS: Record<JobType, number> = {
-	process_form: 5,
-	send_email: 5,
+	process_form: DEFAULT_ATTEMPT_LIMIT,
+	send_email: DEFAULT_ATTEMPT_LIMIT,
 	deliver_formbot: 1,
 };
 
-function backoffWithJitter(attempts: number): number {
+export function backoffWithJitter(attempts: number): number {
 	const ceiling = Math.min(1_000 * 2 ** attempts, 5 * 60_000);
 
 	return ceiling / 2 + Math.random() * (ceiling / 2);
@@ -54,6 +54,7 @@ export async function startWorker({
 	handlers,
 	pollIntervalMs = 1_000,
 	retryDelayMs = backoffWithJitter,
+	maxAttempts = {},
 }: WorkerOptions): Promise<Worker | null> {
 	const lockClient = await takeWorkerLock(connectionString);
 
@@ -73,7 +74,12 @@ export async function startWorker({
 	const failJob = (job: Job, error: unknown): Promise<boolean> => {
 		console.error(`Job ${job.id} (${job.type}) failed:`, errorMessage(error));
 
-		if (job.attempts >= MAX_ATTEMPTS[job.type]) {
+		const limit =
+			job.type === "deliver_formbot"
+				? MAX_ATTEMPTS.deliver_formbot
+				: maxAttempts[job.type] ?? MAX_ATTEMPTS[job.type];
+
+		if (job.attempts >= limit) {
 			return killJob(pool, job, safeMessage(error));
 		}
 

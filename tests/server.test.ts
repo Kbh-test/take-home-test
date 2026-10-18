@@ -103,6 +103,7 @@ describe("startService", () => {
 				{
 					pool,
 					connectionString: CONNECTION_STRING,
+					maxAttempts: undefined,
 					handlers: {
 						process_form: expect.any(Function),
 						send_email: expect.any(Function),
@@ -115,6 +116,15 @@ describe("startService", () => {
 		workerDone.resolve();
 		await service.stop();
 		expect(pool.end).not.toHaveBeenCalled();
+	});
+
+	it("passes configured attempt limits to the worker", async () => {
+		const maxAttempts = { process_form: 3, send_email: 7 };
+		const service = startService({ pool, connectionString: CONNECTION_STRING, port: 0, maxAttempts });
+		services.push(service);
+		await service.ready;
+
+		expect(startWorkerMock).toHaveBeenCalledWith(expect.objectContaining({ maxAttempts }));
 	});
 
 	it("finishes an in-flight request before stop resolves", async () => {

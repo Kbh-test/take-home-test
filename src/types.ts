@@ -51,6 +51,8 @@ export type TransformResult =
 
 export type JobType = "process_form" | "send_email" | "deliver_formbot";
 
+export type RetryLimits = Partial<Record<"process_form" | "send_email", number>>;
+
 export type Job = {
 	id: string;
 	inboundFormId: string;
@@ -82,6 +84,7 @@ export type ServiceOptions = {
 	pool: Pool;
 	connectionString: string;
 	port: number | string;
+	maxAttempts?: RetryLimits;
 };
 
 export type Service = {

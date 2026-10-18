@@ -1,5 +1,11 @@
 
 
+## Retry configuration
+
+`PROCESS_FORM_MAX_ATTEMPTS` and `SEND_EMAIL_MAX_ATTEMPTS` default to 5 and must be positive safe integers. They limit all failures, including invalid or missing geocoder coordinates and unexpected errors.
+
+Processing and email reuse the existing exponential backoff with equal jitter capped at 5 minutes. After the configured number of failed attempts, the job becomes dead and opens a review ticket. Increase the limits to allow more time for provider outages. FORM-BOT always gets one attempt, then a failure opens a review ticket.
+
 ## Running locally
 
 Prerequisites:

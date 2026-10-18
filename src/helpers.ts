@@ -1,5 +1,7 @@
 import { type } from "arktype";
 
+export const DEFAULT_ATTEMPT_LIMIT = 5;
+
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const isCalendarDate = (value: string): boolean => {
@@ -38,4 +40,14 @@ export function readPort(value = "3000"): number {
 	}
 
 	return port;
+}
+
+export function readAttemptLimit(name: string, value = String(DEFAULT_ATTEMPT_LIMIT)): number {
+	const limit = Number(value);
+
+	if (!Number.isSafeInteger(limit) || limit < 1) {
+		throw new Error(`${name} must be a positive safe integer`);
+	}
+
+	return limit;
 }

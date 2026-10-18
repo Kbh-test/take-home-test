@@ -3,10 +3,12 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Pool } from "pg";
 
 import { claimJob, completeJob, recoverJobs } from "../src/db/jobs";
+import { processForm } from "../src/jobs/process_form";
 import { callProvider, JobError } from "../src/jobs/provider";
-import type { Job, JobStatus, JobType } from "../src/types";
+import type { Job, JobStatus, JobType, RetryLimits } from "../src/types";
 import type { JobHandler, Worker } from "../src/worker/types";
-import { MAX_ATTEMPTS, startWorker } from "../src/worker/worker";
+import { backoffWithJitter, MAX_ATTEMPTS, startWorker } from "../src/worker/worker";
+import { coordinates, payloadWith } from "./fixtures/form";
 import { createCleanup, createMigratedPool } from "./helpers/db";
 import { waitUntil } from "./helpers/wait";
 
@@ -28,6 +30,7 @@ describe("worker", () => {
 
 	beforeEach(async () => {
 		jest.spyOn(console, "error").mockImplementation(() => undefined);
+		jest.spyOn(console, "warn").mockImplementation(() => undefined);
 		pool = await createMigratedPool(cleanup);
 	});
 
@@ -39,6 +42,7 @@ describe("worker", () => {
 	const start = async (
 		handlers: Partial<Record<JobType, JobHandler>> = {},
 		retryDelayMs = 0,
+		maxAttempts?: RetryLimits,
 	): Promise<Worker | null> => {
 		const worker = await startWorker({
 			pool,
@@ -49,6 +53,7 @@ describe("worker", () => {
 				deliver_formbot: mockHandler(),
 				...handlers,
 			},
+			maxAttempts,
 			pollIntervalMs: 10,
 			retryDelayMs: () => retryDelayMs,
 		});
@@ -108,6 +113,116 @@ describe("worker", () => {
 		}) as never);
 	};
 
+
+	const emailFailures: [string, (signal: AbortSignal) => Promise<{ statusCode: number }>][] = [
+		["500", async () => ({ statusCode: 500 })],
+		["429", async () => ({ statusCode: 429 })],
+		["timeout", (signal) => sleep(10_000, { statusCode: 200 }, { signal })],
+	];
+
+	it.each(emailFailures)("retries email %s failures within a higher configured limit and then succeeds", async (_kind, request) => {
+		const { jobId } = await insertJob("send_email");
+		const sendEmail = mockHandler().mockImplementation(async () => {
+			if (sendEmail.mock.calls.length <= MAX_ATTEMPTS.send_email + 2) {
+				await callProvider("SendGrid", request, 5);
+			}
+		});
+
+		await start({ send_email: sendEmail }, 0, { send_email: 8 });
+
+		expect(await waitForStatus(jobId, "done")).toMatchObject({ attempts: MAX_ATTEMPTS.send_email + 3 });
+		expect(await tickets()).toEqual([]);
+		expect(console.warn).not.toHaveBeenCalled();
+	});
+
+	it("never retries a timed-out FORM-BOT delivery", async () => {
+		const { jobId } = await insertJob("deliver_formbot");
+		const formBot = mockHandler().mockImplementation(async () => {
+			await callProvider("FORM-BOT", (signal) => sleep(10_000, { statusCode: 200 }, { signal }), 5);
+		});
+
+		await start({ deliver_formbot: formBot });
+
+		expect(await waitForStatus(jobId, "dead")).toMatchObject({ attempts: 1 });
+		expect(formBot).toHaveBeenCalledTimes(1);
+		expect(await tickets()).toMatchObject([{ job_id: jobId, reason_code: "delivery_uncertain" }]);
+	});
+
+	it("honours separate configured limits for permanent failures", async () => {
+		const email = await insertJob("send_email");
+		const form = await insertJob("process_form");
+		const failure = new JobError("Provider returned 400");
+
+		await start({
+			send_email: mockHandler().mockRejectedValue(failure),
+			process_form: mockHandler().mockRejectedValue(failure),
+		}, 0, { send_email: 2, process_form: 3 });
+
+		expect(await waitForStatus(email.jobId, "dead")).toMatchObject({ attempts: 2 });
+		expect(await waitForStatus(form.jobId, "dead")).toMatchObject({ attempts: 3 });
+		expect(await tickets()).toHaveLength(2);
+		expect(console.warn).not.toHaveBeenCalled();
+	});
+
+	it("keeps unexpected email failures finite", async () => {
+		const { jobId } = await insertJob("send_email");
+		await start({ send_email: mockHandler().mockRejectedValue(new Error("unexpected")) });
+
+		expect(await waitForStatus(jobId, "dead")).toMatchObject({
+			attempts: MAX_ATTEMPTS.send_email,
+			last_error: "Unexpected error; see worker logs",
+		});
+		expect(await tickets()).toMatchObject([{ job_id: jobId, reason_code: "job_failed" }]);
+	});
+
+	it("retries geocoder 500 within its configured limit and then succeeds", async () => {
+		const { formId, jobId } = await insertJob("process_form");
+		await pool.query("UPDATE inbound_forms SET payload = $1 WHERE id = $2", [payloadWith(), formId]);
+		let calls = 0;
+		const geocode = jest.fn(async () => {
+			calls++;
+			return calls <= 4 ? { statusCode: 500 } : { statusCode: 200, body: coordinates };
+		});
+
+		await start({ process_form: (db, id) => processForm(db, id, geocode) }, 0, { process_form: 6 });
+
+		expect(await waitForStatus(jobId, "done")).toMatchObject({ attempts: 5 });
+		expect(await tickets()).toEqual([]);
+		expect(console.warn).not.toHaveBeenCalled();
+	});
+
+	it("keeps geocoder invalid coordinates failures finite", async () => {
+		const { formId, jobId } = await insertJob("process_form");
+		await pool.query("UPDATE inbound_forms SET payload = $1 WHERE id = $2", [payloadWith(), formId]);
+		const geocode = jest.fn(async () => ({ statusCode: 200, body: { latitude: 91, longitude: 0 }, }));
+
+		await start({ process_form: (db, id) => processForm(db, id, geocode) });
+
+		expect(await waitForStatus(jobId, "dead")).toMatchObject({
+			attempts: MAX_ATTEMPTS.process_form,
+			last_error: "Geocoder returned invalid coordinates",
+		});
+		expect(geocode).toHaveBeenCalledTimes(MAX_ATTEMPTS.process_form);
+		expect(await tickets()).toMatchObject([{ job_id: jobId, reason_code: "job_failed" }]);
+		expect(console.warn).not.toHaveBeenCalled();
+	});
+
+	it("keeps geocoder no coordinates failures finite", async () => {
+		const { formId, jobId } = await insertJob("process_form");
+		await pool.query("UPDATE inbound_forms SET payload = $1 WHERE id = $2", [payloadWith(), formId]);
+		const geocode = jest.fn(async () => ({ statusCode: 200,  }));
+
+		await start({ process_form: (db, id) => processForm(db, id, geocode) });
+
+		expect(await waitForStatus(jobId, "dead")).toMatchObject({
+			attempts: MAX_ATTEMPTS.process_form,
+			last_error: "Geocoder returned no coordinates",
+		});
+		expect(geocode).toHaveBeenCalledTimes(MAX_ATTEMPTS.process_form);
+		expect(await tickets()).toMatchObject([{ job_id: jobId, reason_code: "job_failed" }]);
+		expect(console.warn).not.toHaveBeenCalled();
+	});
+
 	it("runs a pending job and marks it done", async () => {
 		const { formId, jobId } = await insertJob("send_email");
 		const sendEmail = mockHandler();
@@ -151,13 +266,13 @@ describe("worker", () => {
 
 	it("marks a job dead with one ticket after the retry limit", async () => {
 		const { formId, jobId } = await insertJob("send_email");
-		const sendEmail = mockHandler().mockRejectedValue(providerError);
+		const sendEmail = mockHandler().mockRejectedValue(new JobError("Provider returned 400"));
 
 		await start({ send_email: sendEmail });
 
 		expect(await waitForStatus(jobId, "dead")).toMatchObject({
 			attempts: MAX_ATTEMPTS.send_email,
-			last_error: "Provider returned 500",
+			last_error: "Provider returned 400",
 		});
 		expect(sendEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS.send_email);
 		expect(await tickets()).toEqual([
@@ -165,7 +280,7 @@ describe("worker", () => {
 				inbound_form_id: formId,
 				job_id: jobId,
 				reason_code: "job_failed",
-				reason: "send_email failed: Provider returned 500",
+				reason: "send_email failed: Provider returned 400",
 			},
 		]);
 	});
@@ -407,5 +522,22 @@ describe("worker", () => {
 		await worker!.stopped;
 
 		expect(await jobRow(jobId)).toMatchObject({ status: "running", attempts: 1 });
+	});
+});
+
+describe("backoffWithJitter", () => {
+	it("keeps exponential backoff capped with equal jitter even for large attempt counts", () => {
+		const random = jest.spyOn(Math, "random").mockReturnValue(0);
+		try {
+			expect(backoffWithJitter(1)).toBe(1_000);
+			expect(backoffWithJitter(8)).toBe(128_000);
+			expect(backoffWithJitter(9)).toBe(150_000);
+			expect(backoffWithJitter(2_147_483_647)).toBe(150_000);
+			random.mockReturnValue(0.999);
+			expect(backoffWithJitter(2_147_483_647)).toBeGreaterThan(150_000);
+			expect(backoffWithJitter(2_147_483_647)).toBeLessThan(300_000);
+		} finally {
+			random.mockRestore();
+		}
 	});
 });

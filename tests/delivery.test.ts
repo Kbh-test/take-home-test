@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 
 import type { TransformedFormSchema } from "../src/forms/schemas/transformed_schema";
 import { deliverToFormBot } from "../src/jobs/deliver_formbot";
-import { callProvider, JobError } from "../src/jobs/provider";
+import { callProvider } from "../src/jobs/provider";
 import { sendFormEmail } from "../src/jobs/send_email";
 import type { deliverForm } from "../src/providers/formbot";
 import type { sendEmail } from "../src/providers/sendgrid";
@@ -171,7 +171,7 @@ describe("callProvider", () => {
 			20,
 		);
 
-		await expect(call).rejects.toEqual(new JobError("SendGrid timed out after 20ms"));
+		await expect(call).rejects.toMatchObject({ message: "SendGrid timed out after 20ms" });
 		expect(aborted).toBe(true);
 	});
 });

@@ -21,7 +21,7 @@ function closeServer(server: Server): Promise<void> {
 	});
 }
 
-export function startService({ pool, connectionString, port }: ServiceOptions): Service {
+export function startService({ pool, connectionString, port, maxAttempts }: ServiceOptions): Service {
 	let stopRequested = false;
 	let worker: Worker | null = null;
 	let stopping: Promise<void> | undefined;
@@ -42,7 +42,7 @@ export function startService({ pool, connectionString, port }: ServiceOptions): 
 			return;
 		}
 
-		worker = await startWorker({ pool, connectionString, handlers });
+		worker = await startWorker({ pool, connectionString, handlers, maxAttempts });
 
 		if (worker) {
 			followWorker(worker.stopped.catch(() => undefined));
