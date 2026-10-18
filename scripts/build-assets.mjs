@@ -12,4 +12,7 @@ await build({
 	entryNames: "[name]",
 });
 
-await copyFile("src/pages/workers.css", "dist/src/public/workers.css");
+await Promise.all([
+	copyFile("src/pages/home.css", "dist/src/public/home.css"),
+	copyFile("src/pages/workers.css", "dist/src/public/workers.css"),
+]);

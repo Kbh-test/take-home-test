@@ -42,7 +42,7 @@ export function createApp(pool: Pool) {
 	app.use("/assets", express.static(existsSync(localAssets) ? localAssets : builtAssets));
 
 	app.get("/", (_req, res) => {
-		res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Healthtech-1 Registration API</title></head><body><div id="root">${renderToString(<HomePage />)}</div><script defer src="/assets/home.js"></script></body></html>`);
+		res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/home.css"><title>Healthtech-1 Registration API</title></head><body><div id="root">${renderToString(<HomePage />)}</div><script defer src="/assets/home.js"></script></body></html>`);
 	});
 
 	app.get("/workers", (_req, res) => {

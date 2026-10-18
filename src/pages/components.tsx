@@ -1,5 +1,6 @@
 import type { JobSummary, RequestSummary, RetryTicket } from "./types";
 import { RetryTicketForm } from "./RetryTicketForm";
+import personOne from "../forms/examples/person_one.json";
 
 export function JobBadge({ job }: { job: RequestSummary["jobs"][number] }) {
 	return (
@@ -70,5 +71,20 @@ export function JobRow({ job, onRequeued }: { job: JobSummary; onRequeued: () =>
 				? <RetryTicketForm ticketId={job.ticketId} jobType={job.type} onRequeued={onRequeued} />
 				: <span className="muted">{statusMessage}</span>}
 		</div>
+	);
+}
+
+export function CurlCommand({ baseUrl = "http://localhost:3000" }: { baseUrl?: string }) {
+	const payload = JSON.stringify(personOne, null, 2);
+	const command = [
+		`curl -X POST ${baseUrl}/ingest \\`,
+		`  -H 'Content-Type: application/json' \\`,
+		`  -d '${payload}'`,
+	].join("\n");
+
+	return (
+		<pre>
+			<code>{command}</code>
+		</pre>
 	);
 }
