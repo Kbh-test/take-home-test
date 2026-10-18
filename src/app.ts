@@ -1,13 +1,12 @@
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import type { Pool } from "pg";
 
+import { HTTP_ERRORS, INGEST_BODY_LIMIT, sendError } from "./http_errors";
 import { ingestForm } from "./ingest/ingest";
-
-export const INGEST_BODY_LIMIT = "100kb";
 
 const requireJson: RequestHandler = (req, res, next) => {
 	if (!req.is("application/json")) {
-		res.status(415).json({ error: "Content-Type must be application/json" });
+		sendError(res, HTTP_ERRORS.unsupportedMediaType);
 		return;
 	}
 
@@ -16,12 +15,12 @@ const requireJson: RequestHandler = (req, res, next) => {
 
 const handleBodyErrors: ErrorRequestHandler = (error, _req, res, next) => {
 	if (error.type === "entity.parse.failed") {
-		res.status(400).json({ error: "Request body must be valid JSON" });
+		sendError(res, HTTP_ERRORS.malformedJson);
 		return;
 	}
 
 	if (error.type === "entity.too.large") {
-		res.status(413).json({ error: `Request body must not exceed ${INGEST_BODY_LIMIT}` });
+		sendError(res, HTTP_ERRORS.tooLarge);
 		return;
 	}
 
@@ -50,7 +49,7 @@ export function createApp(pool: Pool) {
 				res.status(202).json({ status: "accepted" });
 			} catch (error) {
 				console.error("Ingest failed:", (error as Error).message);
-				res.status(503).json({ error: "Service unavailable, retry later" });
+				sendError(res, HTTP_ERRORS.unavailable);
 			}
 		},
 	);

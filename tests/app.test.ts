@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
 import request from "supertest";
 
-import { createApp, INGEST_BODY_LIMIT } from "../src/app";
+import { createApp } from "../src/app";
+import { INGEST_BODY_LIMIT } from "../src/http_errors";
 import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
 describe("POST /ingest HTTP errors", () => {
