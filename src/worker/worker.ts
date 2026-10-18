@@ -4,6 +4,7 @@ import { Client } from "pg";
 import { claimJob, completeJob, killJob, recoverJobs, retryJob } from "../db/jobs";
 import { WORKER_LOCK_ID } from "../db/locks";
 import { DB_TIMEOUTS } from "../db/pool";
+import { errorMessage } from "../helpers";
 import { JobError } from "../jobs/provider";
 import type { Job, JobType } from "../types";
 import type { Worker, WorkerOptions } from "./types";
@@ -18,10 +19,6 @@ function backoffWithJitter(attempts: number): number {
 	const ceiling = Math.min(1_000 * 2 ** attempts, 5 * 60_000);
 
 	return ceiling / 2 + Math.random() * (ceiling / 2);
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 function safeMessage(error: unknown): string {

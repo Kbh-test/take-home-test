@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { Pool } from "pg";
 
 import { createApp } from "./app";
+import { errorMessage } from "./helpers";
 import { deliverToFormBot } from "./jobs/deliver_formbot";
 import { processForm } from "./jobs/process_form";
 import { sendFormEmail } from "./jobs/send_email";
@@ -13,10 +14,6 @@ const handlers = {
 	send_email: sendFormEmail,
 	deliver_formbot: deliverToFormBot,
 };
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
 
 function listenHttpServer(server: Server, port: number | string): Promise<Server> {
 	return new Promise((resolve, reject) => {
@@ -34,7 +31,15 @@ function closeHttpServer(server: Server): Promise<void> {
 	});
 }
 
-export function startService({ pool, port }: { pool: Pool; port: number | string }) {
+export function startService({
+	pool,
+	connectionString,
+	port,
+}: {
+	pool: Pool;
+	connectionString: string;
+	port: number | string;
+}) {
 	let stopping = false;
 	let failed = false;
 	let worker: Worker | null = null;
@@ -71,7 +76,7 @@ export function startService({ pool, port }: { pool: Pool; port: number | string
 			return;
 		}
 
-		worker = await startWorker({ pool, connectionString: pool.options.connectionString!, handlers });
+		worker = await startWorker({ pool, connectionString, handlers });
 		worker?.stopped.then(
 			() => onWorkerStopped("Worker stopped unexpectedly"),
 			(error: unknown) => onWorkerStopped(`Worker stopped unexpectedly: ${errorMessage(error)}`),

@@ -25,3 +25,7 @@ export const calendarDate = type("string").narrow(
 
 export const calendarDateToUtc = (value: string): Date =>
 	new Date(`${value}T00:00:00Z`);
+
+export function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}

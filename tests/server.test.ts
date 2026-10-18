@@ -24,6 +24,8 @@ const deferred = <T = void>() => {
 	return { promise, resolve, reject };
 };
 
+const CONNECTION_STRING = "postgres://test";
+
 describe("startService", () => {
 	let createServerSpy: jest.SpiedFunction<typeof http.createServer>;
 	let services: Array<ReturnType<typeof startService>>;
@@ -42,7 +44,6 @@ describe("startService", () => {
 		services = [];
 		events = [];
 		pool = {
-			options: { connectionString: "postgres://test" },
 			end: jest.fn(async () => {
 				events.push("pool ended");
 			}),
@@ -82,7 +83,7 @@ describe("startService", () => {
 	});
 
 	const start = (port: number = 0) => {
-		const service = startService({ pool, port });
+		const service = startService({ pool, connectionString: CONNECTION_STRING, port });
 		services.push(service);
 		return service;
 	};
@@ -118,7 +119,7 @@ describe("startService", () => {
 			[
 				{
 					pool,
-					connectionString: "postgres://test",
+					connectionString: CONNECTION_STRING,
 					handlers: {
 						process_form: expect.any(Function),
 						send_email: expect.any(Function),

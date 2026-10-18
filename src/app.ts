@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler, type RequestHandler } from "express";
 import type { Pool } from "pg";
 
+import { errorMessage } from "./helpers";
 import { HTTP_ERRORS, INGEST_BODY_LIMIT, sendError } from "./http_errors";
 import { ingestForm } from "./ingest/ingest";
 
@@ -48,7 +49,7 @@ export function createApp(pool: Pool) {
 				await ingestForm(pool, req.body);
 				res.status(202).json({ status: "accepted" });
 			} catch (error) {
-				console.error("Ingest failed:", (error as Error).message);
+				console.error("Ingest failed:", errorMessage(error));
 				sendError(res, HTTP_ERRORS.unavailable);
 			}
 		},
