@@ -11,6 +11,7 @@ import { HTTP_ERRORS, INGEST_BODY_LIMIT, sendError } from "./http_errors";
 import { ingestForm } from "./ingest/ingest";
 import { HomePage } from "./pages/HomePage";
 import { WorkersPage } from "./pages/WorkersPage";
+import { JSX } from "react";
 
 const requireJson: RequestHandler = (req, res, next) => {
 	if (!req.is("application/json")) {
@@ -35,6 +36,22 @@ const handleBodyErrors: ErrorRequestHandler = (error, _req, res, next) => {
 	next(error);
 };
 
+const renderPage = (renderComponent: JSX.Element, script: string) => (
+	`
+	<!doctype html>
+		<html lang="en">
+		<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/home.css">
+		<title>Healthtech-1 Registration API</title>
+		</head>
+		<body>
+			<div id="root">${renderToString(renderComponent)}</div>
+			<script defer src="/assets/${script}"></script>
+		</body>
+	</html>`
+)
+
 export function createApp(pool: Pool) {
 	const app = express();
 	const localAssets = path.join(__dirname, "public");
@@ -42,13 +59,13 @@ export function createApp(pool: Pool) {
 	app.use("/assets", express.static(existsSync(localAssets) ? localAssets : builtAssets));
 
 	app.get("/", (_req, res) => {
-		res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/home.css"><title>Healthtech-1 Registration API</title></head><body><div id="root">${renderToString(<HomePage />)}</div><script defer src="/assets/home.js"></script></body></html>`);
+		res.type("html").send(renderPage(<HomePage />, "home.js"));
 	});
 
 	app.get("/workers", (_req, res) => {
-		res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/assets/workers.css"><title>Work queue · Healthtech-1</title></head><body><div id="root">${renderToString(<WorkersPage />)}</div><script defer src="/assets/workers.js"></script></body></html>`);
+		res.type("html").send(renderPage(<WorkersPage />, "workers.js"));
 	});
-
+	
 	app.get("/api/requests", async (_req, res) => {
 		try {
 			res.json(await listRecentRequests(pool));
