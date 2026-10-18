@@ -180,6 +180,48 @@ describe("processForm", () => {
 		expect(await snapshot()).toStrictEqual(before);
 	});
 
+	it("throws and writes nothing when the geocoder returns a NaN latitude", async () => {
+		const formId = await ingestAndGetId(pool, payloadWith());
+		const before = await snapshot();
+		geocode.mockResolvedValue({ statusCode: 200, body: { latitude: Number.NaN, longitude: -0.1 } });
+
+		await expect(processForm(pool, formId, geocode)).rejects.toStrictEqual(
+			new JobError("Geocoder returned invalid coordinates"),
+		);
+		expect(await snapshot()).toStrictEqual(before);
+		expect(await formStatus(formId)).toBe("received");
+		expect(await findTransformedForm(pool, formId)).toBeNull();
+		expect((await jobsOf(formId)).map(({ type }) => type)).toStrictEqual(["process_form"]);
+	});
+
+	it("throws and writes nothing when the geocoder returns a latitude above 90", async () => {
+		const formId = await ingestAndGetId(pool, payloadWith());
+		const before = await snapshot();
+		geocode.mockResolvedValue({ statusCode: 200, body: { latitude: 91, longitude: -0.1 } });
+
+		await expect(processForm(pool, formId, geocode)).rejects.toStrictEqual(
+			new JobError("Geocoder returned invalid coordinates"),
+		);
+		expect(await snapshot()).toStrictEqual(before);
+		expect(await formStatus(formId)).toBe("received");
+		expect(await findTransformedForm(pool, formId)).toBeNull();
+		expect((await jobsOf(formId)).map(({ type }) => type)).toStrictEqual(["process_form"]);
+	});
+
+	it("throws and writes nothing when the geocoder returns a longitude below -180", async () => {
+		const formId = await ingestAndGetId(pool, payloadWith());
+		const before = await snapshot();
+		geocode.mockResolvedValue({ statusCode: 200, body: { latitude: 51.5, longitude: -181 } });
+
+		await expect(processForm(pool, formId, geocode)).rejects.toStrictEqual(
+			new JobError("Geocoder returned invalid coordinates"),
+		);
+		expect(await snapshot()).toStrictEqual(before);
+		expect(await formStatus(formId)).toBe("received");
+		expect(await findTransformedForm(pool, formId)).toBeNull();
+		expect((await jobsOf(formId)).map(({ type }) => type)).toStrictEqual(["process_form"]);
+	});
+
 	it("does nothing when re-run after the form was transformed", async () => {
 		const formId = await ingestAndGetId(pool, payloadWith());
 		await processForm(pool, formId, geocode);

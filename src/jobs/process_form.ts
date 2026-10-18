@@ -25,6 +25,15 @@ function isInUk({ latitude, longitude }: Coordinates): boolean {
 	);
 }
 
+function hasValidCoordinates({ latitude, longitude }: Coordinates): boolean {
+	return (
+		Number.isFinite(latitude) &&
+		Number.isFinite(longitude) &&
+		Math.abs(latitude) <= 90 &&
+		Math.abs(longitude) <= 180
+	);
+}
+
 export async function processForm(
 	pool: Pool,
 	inboundFormId: string,
@@ -69,6 +78,10 @@ export async function processForm(
 
 	if (!coordinates) {
 		throw new JobError("Geocoder returned no coordinates");
+	}
+
+	if (!hasValidCoordinates(coordinates)) {
+		throw new JobError("Geocoder returned invalid coordinates");
 	}
 
 	if (!isInUk(coordinates)) {
