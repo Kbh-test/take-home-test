@@ -47,7 +47,8 @@ Database-backed tests use throwaway `test_<uuid>` databases. The tests themselve
 | [pipeline.test.ts](pipeline.test.ts) | End to end: ingest, process, email and FORM-BOT delivery with a real worker. |
 | [scenarios.test.ts](scenarios.test.ts) | Integration: schema-drift replay and provider retries through the full pipeline. |
 | [cli.test.ts](cli.test.ts) | Review ticket CLI: list, requeue and close tickets, and the allowed status transitions. |
-| [server.test.ts](server.test.ts) | `startService`: startup, graceful shutdown and failure handling for the API and worker. |
+| [server.test.ts](server.test.ts) | `startService`: startup, concurrent graceful stop and failure reporting for the API and worker. |
+| [run.test.ts](run.test.ts) | `run`: signal handling, forced exit, pool cleanup and exit codes. |
 | [transform.test.ts](transform.test.ts) | `transform()`: field mapping and the cases that block a form. |
 | [schema.test.ts](schema.test.ts) | Database schema constraints: duplicates, statuses, counters, ticket rules. |
 | [migrate.test.ts](migrate.test.ts) | Migration runner: ordering, idempotency, rollback, concurrent runs, file naming. |

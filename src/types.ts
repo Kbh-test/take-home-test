@@ -1,4 +1,5 @@
 import { type } from "arktype";
+import type { Pool } from "pg";
 
 import type { TransformedFormSchema } from "./forms/schemas/transformed_schema";
 import { calendarDate } from "./helpers";
@@ -67,4 +68,16 @@ export type OpenTicket = {
 	formId: string;
 	jobType: JobType | null;
 	reason: string;
+};
+
+export type ServiceOptions = {
+	pool: Pool;
+	connectionString: string;
+	port: number | string;
+};
+
+export type Service = {
+	ready: Promise<void>;
+	stop: () => Promise<void>;
+	workerStopped: Promise<void>;
 };

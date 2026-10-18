@@ -1,25 +1,21 @@
 import { databaseUrl } from "./db/config";
 import { createPool } from "./db/pool";
 import { errorMessage } from "./helpers";
-import { startService } from "./server";
+import { run } from "./run";
 
 const PORT = process.env.PORT || 3000;
 
 try {
 	const connectionString = databaseUrl();
-	const service = startService({
+
+	run({
 		pool: createPool(connectionString),
 		connectionString,
 		port: PORT,
-	});
-
-	process.on("SIGTERM", service.shutdown);
-	process.on("SIGINT", service.shutdown);
-
-	void service.shutdownComplete.then((code) => {
-		process.exitCode = code;
+		exit: (code) => process.exit(code),
+		signals: process,
 	});
 } catch (error) {
-	console.error("Startup failed:", errorMessage(error));
-	process.exitCode = 1;
+	console.error(`Startup failed: ${errorMessage(error)}`);
+	process.exit(1);
 }

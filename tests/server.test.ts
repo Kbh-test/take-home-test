@@ -1,12 +1,14 @@
+import { once } from "node:events";
 import http, { get, type RequestListener, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { setTimeout as sleep } from "node:timers/promises";
 import type { Pool } from "pg";
 
 import { createApp } from "../src/app";
 import { startService } from "../src/server";
+import type { Service } from "../src/types";
 import type { Worker } from "../src/worker/types";
 import { startWorker } from "../src/worker/worker";
+import { type Deferred, deferred, nextTurn } from "./helpers/async";
 
 jest.mock("../src/app", () => ({ createApp: jest.fn() }));
 jest.mock("../src/worker/worker", () => ({ startWorker: jest.fn() }));
@@ -14,40 +16,26 @@ jest.mock("../src/worker/worker", () => ({ startWorker: jest.fn() }));
 const createAppMock = jest.mocked(createApp);
 const startWorkerMock = jest.mocked(startWorker);
 
-const deferred = <T = void>() => {
-	let resolve!: (value: T) => void;
-	let reject!: (error: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-};
-
 const CONNECTION_STRING = "postgres://test";
 
 describe("startService", () => {
 	let createServerSpy: jest.SpiedFunction<typeof http.createServer>;
-	let services: Array<ReturnType<typeof startService>>;
+	let services: Service[];
 	let events: string[];
 	let pool: Pool & { end: jest.Mock };
-	let workerDone: ReturnType<typeof deferred<void>>;
+	let workerDone: Deferred;
 	let worker: Worker & { stop: jest.Mock };
-	let release: ReturnType<typeof deferred<void>>;
-	let requestArrived: ReturnType<typeof deferred<void>>;
-	let acquire: ReturnType<typeof deferred<void>>;
+	let release: Deferred;
+	let requestArrived: Deferred;
+	let acquire: Deferred;
 
-	beforeEach(async () => {
+	beforeEach(() => {
 		jest.spyOn(console, "log").mockImplementation(() => undefined);
 		jest.spyOn(console, "error").mockImplementation(() => undefined);
 		createServerSpy = jest.spyOn(http, "createServer");
 		services = [];
 		events = [];
-		pool = {
-			end: jest.fn(async () => {
-				events.push("pool ended");
-			}),
-		} as unknown as Pool & { end: jest.Mock };
+		pool = { end: jest.fn() } as unknown as Pool & { end: jest.Mock };
 		workerDone = deferred();
 		worker = {
 			stopped: workerDone.promise.then(() => {
@@ -75,7 +63,7 @@ describe("startService", () => {
 		acquire.resolve();
 
 		try {
-			await Promise.all(services.map((service) => service.shutdown()));
+			await Promise.allSettled(services.map((service) => service.stop()));
 		} finally {
 			jest.clearAllMocks();
 			jest.restoreAllMocks();
@@ -86,16 +74,6 @@ describe("startService", () => {
 		const service = startService({ pool, connectionString: CONNECTION_STRING, port });
 		services.push(service);
 		return service;
-	};
-
-	const started = async () => {
-		for (let i = 0; i < 200 && startWorkerMock.mock.calls.length === 0; i++) {
-			await sleep(5);
-		}
-		if (startWorkerMock.mock.calls.length === 0) {
-			throw new Error("Worker startup was not reached");
-		}
-		await sleep(5);
 	};
 
 	const server = (): Server => createServerSpy.mock.results.at(-1)!.value;
@@ -110,9 +88,14 @@ describe("startService", () => {
 			}).on("error", reject);
 		});
 
+	const markStopped = (service: Service) =>
+		service.stop().then(() => {
+			events.push("service stopped");
+		});
+
 	it("starts the worker with the shared pool, its connection string and the three handlers", async () => {
 		const service = start();
-		await started();
+		await service.ready;
 
 		expect(createAppMock).toHaveBeenCalledWith(pool);
 		expect(startWorkerMock.mock.calls).toStrictEqual([
@@ -129,101 +112,133 @@ describe("startService", () => {
 			],
 		]);
 
-		const closed = service.shutdown();
 		workerDone.resolve();
-		expect(await closed).toBe(0);
+		await service.stop();
+		expect(pool.end).not.toHaveBeenCalled();
 	});
 
-	it("waits for an in-flight request before ending the pool", async () => {
+	it("finishes an in-flight request before stop resolves", async () => {
 		const service = start();
-		await started();
+		await service.ready;
 		const response = request();
 		await requestArrived.promise;
 
-		const closed = service.shutdown();
+		const stopped = markStopped(service);
 		workerDone.resolve();
-		await sleep(50);
+		await worker.stopped;
+		await nextTurn();
+		expect(events).toStrictEqual(["worker stopped"]);
+
+		release.resolve();
+		expect(await response).toBe("done");
+		await stopped;
+		expect(events).toStrictEqual(["worker stopped", "response sent", "service stopped"]);
+	});
+
+	it("finishes the worker's active job before stop resolves", async () => {
+		const service = start();
+		await service.ready;
+		const response = request();
+		await requestArrived.promise;
+
+		const closed = once(server(), "close");
+		const stopped = markStopped(service);
+		release.resolve();
+		expect(await response).toBe("done");
+		await closed;
+		await nextTurn();
+		expect(events).toStrictEqual(["response sent"]);
+
+		workerDone.resolve();
+		await stopped;
+		expect(events).toStrictEqual(["response sent", "worker stopped", "service stopped"]);
+	});
+
+	it("asks the worker to stop while a request is still in flight", async () => {
+		const service = start();
+		await service.ready;
+		const response = request();
+		await requestArrived.promise;
+
+		const stopped = service.stop();
+		await nextTurn();
 		expect(worker.stop).toHaveBeenCalledTimes(1);
-		expect(pool.end).not.toHaveBeenCalled();
+		expect(server().listening).toBe(false);
+		expect(events).toStrictEqual([]);
 
 		release.resolve();
-		expect(await response).toBe("done");
-		expect(await closed).toBe(0);
-		expect(events).toStrictEqual(["worker stopped", "response sent", "pool ended"]);
-	});
-
-	it("waits for the worker's active job before ending the pool", async () => {
-		const service = start();
-		await started();
-		const response = request();
-		await requestArrived.promise;
-
-		const closed = service.shutdown();
-		release.resolve();
-		expect(await response).toBe("done");
-		await sleep(50);
-		expect(pool.end).not.toHaveBeenCalled();
-
 		workerDone.resolve();
-		expect(await closed).toBe(0);
-		expect(events).toStrictEqual(["response sent", "worker stopped", "pool ended"]);
+		expect(await response).toBe("done");
+		await stopped;
 	});
 
-	it("reuses one shutdown for repeated requests", async () => {
+	it("reuses one stop promise for repeated calls", async () => {
 		const service = start();
-		await started();
+		await service.ready;
 
-		const first = service.shutdown();
-		const second = service.shutdown();
+		const first = service.stop();
+		const second = service.stop();
 		workerDone.resolve();
 
 		expect(second).toBe(first);
-		expect(await first).toBe(0);
-		expect(await service.shutdown()).toBe(0);
+		await first;
+		expect(service.stop()).toBe(first);
 		expect(worker.stop).toHaveBeenCalledTimes(1);
-		expect(pool.end).toHaveBeenCalledTimes(1);
 	});
 
-	it("closes the server and ends the pool when worker startup throws", async () => {
+	it("rejects ready and closes the server when worker startup throws", async () => {
 		startWorkerMock.mockRejectedValue(new Error("connect ECONNREFUSED"));
 
 		const service = start();
 
-		expect(await service.shutdownComplete).toBe(1);
-		expect(console.error).toHaveBeenCalledWith("Startup failed: connect ECONNREFUSED");
-		expect(pool.end).toHaveBeenCalledTimes(1);
+		await expect(service.ready).rejects.toThrow("connect ECONNREFUSED");
+		await service.stop();
 		expect(server().listening).toBe(false);
 	});
 
-	it("does not start the worker and ends the pool when the port is in use", async () => {
+	it("rejects ready and does not start the worker when the port is in use", async () => {
 		const occupied = http.createServer();
 		await new Promise<void>((resolve) => occupied.listen(0, resolve));
 
 		try {
 			const service = start((occupied.address() as AddressInfo).port);
 
-			expect(await service.shutdownComplete).toBe(1);
-			expect(console.error).toHaveBeenCalledWith(expect.stringContaining("EADDRINUSE"));
+			await expect(service.ready).rejects.toThrow("EADDRINUSE");
+			await service.stop();
 			expect(startWorkerMock).not.toHaveBeenCalled();
-			expect(pool.end).toHaveBeenCalledTimes(1);
 		} finally {
 			await new Promise((resolve) => occupied.close(resolve));
 		}
 	});
 
-	it("stops a worker acquired after shutdown was requested during startup", async () => {
-		startWorkerMock.mockReturnValue(acquire.promise.then(() => worker));
+	it("skips worker startup when stop is requested before the server is listening", async () => {
+		const service = start();
+		const stopped = service.stop();
+
+		await service.ready;
+		await stopped;
+		expect(startWorkerMock).not.toHaveBeenCalled();
+		expect(server().listening).toBe(false);
+	});
+
+	it("stops a worker acquired after stop was requested during startup", async () => {
+		const workerRequested = deferred();
+		startWorkerMock.mockImplementation(() => {
+			workerRequested.resolve();
+			return acquire.promise.then(() => worker);
+		});
 
 		const service = start();
-		await started();
-		const closed = service.shutdown();
+		await workerRequested.promise;
+		const stopped = service.stop();
+		await nextTurn();
+		expect(worker.stop).not.toHaveBeenCalled();
 
-		workerDone.resolve();
 		acquire.resolve();
-
-		expect(await closed).toBe(0);
+		workerDone.resolve();
+		await service.ready;
+		await stopped;
 		expect(worker.stop).toHaveBeenCalledTimes(1);
-		expect(pool.end).toHaveBeenCalledTimes(1);
 		expect(server().listening).toBe(false);
 	});
 
@@ -231,34 +246,63 @@ describe("startService", () => {
 		startWorkerMock.mockResolvedValue(null);
 
 		const service = start();
-		await started();
+		await service.ready;
 		release.resolve();
 
 		expect(await request()).toBe("done");
-		expect(await service.shutdown()).toBe(0);
-		expect(pool.end).toHaveBeenCalledTimes(1);
+		await service.stop();
 	});
 
-	it("cleans up with exit code 1 when the worker stops unexpectedly and keeps it after a signal", async () => {
+	it("resolves workerStopped when the worker loop ends", async () => {
 		const service = start();
-		await started();
+		await service.ready;
 
 		workerDone.resolve();
 
-		expect(await service.shutdownComplete).toBe(1);
-		expect(console.error).toHaveBeenCalledWith("Worker stopped unexpectedly");
-		expect(pool.end).toHaveBeenCalledTimes(1);
-		expect(await service.shutdown()).toBe(1);
-		expect(pool.end).toHaveBeenCalledTimes(1);
+		await service.workerStopped;
+		expect(events).toStrictEqual(["worker stopped"]);
 	});
 
-	it("still ends the pool and exits 1 when stopping the worker fails", async () => {
+	it("resolves workerStopped and reports the loop error from stop when the worker loop rejects", async () => {
 		const service = start();
-		await started();
+		await service.ready;
+
+		workerDone.reject(new Error("loop crashed"));
+		await service.workerStopped;
+
+		const failure = await service.stop().catch((error: unknown) => error);
+
+		expect(failure).toBeInstanceOf(AggregateError);
+		expect((failure as AggregateError).errors).toStrictEqual([new Error("loop crashed")]);
+		expect(server().listening).toBe(false);
+	});
+
+	it("still stops the worker and reports the failure when closing the server fails", async () => {
+		const service = start();
+		await service.ready;
+		const closeServer = server().close.bind(server());
+		jest
+			.spyOn(server(), "close")
+			.mockImplementation((callback) => closeServer(() => callback?.(new Error("close failed"))));
+		workerDone.resolve();
+
+		const failure = await service.stop().catch((error: unknown) => error);
+
+		expect(failure).toBeInstanceOf(AggregateError);
+		expect((failure as AggregateError).errors).toStrictEqual([new Error("close failed")]);
+		expect(worker.stop).toHaveBeenCalledTimes(1);
+		expect(events).toStrictEqual(["worker stopped"]);
+	});
+
+	it("still closes the server and reports the failure when stopping the worker fails", async () => {
+		const service = start();
+		await service.ready;
 		worker.stop.mockRejectedValue(new Error("lock release failed"));
 
-		expect(await service.shutdown()).toBe(1);
-		expect(console.error).toHaveBeenCalledWith("Shutdown cleanup failed:", "lock release failed");
-		expect(pool.end).toHaveBeenCalledTimes(1);
+		const failure = await service.stop().catch((error: unknown) => error);
+
+		expect(failure).toBeInstanceOf(AggregateError);
+		expect((failure as AggregateError).errors).toStrictEqual([new Error("lock release failed")]);
+		expect(server().listening).toBe(false);
 	});
 });
