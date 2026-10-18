@@ -4,7 +4,8 @@
 
 Prerequisites:
 
-* Node.js >=22.9(verified on 25.6.1)
+* Node.js >=22.9
+* Postgres 18
 * Docker with Compose (runs Postgres 18)
 
 Install dependencies:
@@ -28,7 +29,7 @@ npm run build && npm start   # compiled
 
 Checks: npm run typecheck and npm run lint (both run in CI).
 
-Tests: see [tests/README.md](tests/README.md) for how to run them and how the tests cover each resilience scenario.
+Tests: see [tests/README.md](tests/README.md) for how to run them and what scenarios are covered.
 
 Connect:
 
