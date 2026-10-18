@@ -5,8 +5,8 @@
   "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc && cp -R src/db/migrations dist/src/db/",
-    "start": "node dist/src/index.js",
-    "dev": "tsx watch src/index.ts",
+    "start": "node --env-file-if-exists=.env dist/src/index.js",
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "db:setup": "([ -f .env ] || cp .env.example .env) && docker compose up -d --wait && npm run db:migrate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest"

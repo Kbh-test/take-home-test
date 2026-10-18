@@ -1,3 +1,49 @@
+
+
+## Running locally
+
+Prerequisites:
+
+* Node.js >=22.9(verified on 25.6.1)
+* Docker with Compose (runs Postgres 18)
+
+Install dependencies:
+
+```bash
+npm ci
+```
+
+Set up the database before starting the app. This creates `.env` if missing, starts Postgres 18 (Docker) and applies migrations:
+
+```bash
+npm run db:setup
+```
+
+Run the app (reads `DATABASE_URL` from `.env`):
+
+```bash
+npm run dev                  # watch mode
+npm run build && npm start   # compiled
+```
+
+Run the tests (Postgres must be running):
+
+```bash
+npm test
+```
+
+Connect:
+
+```bash
+docker compose exec db psql -U postgres -d take_home
+```
+
+Stop it with `docker compose down`. Add `-v` to delete the data.
+
+##############################################################################################################
+################################## Original Problem Statement  ###############################################
+##############################################################################################################
+
 # Processing Forms
 
 At Healthtech-1, one of our core responsibilities is to:
@@ -44,19 +90,3 @@ How to submit
 * The email sent to you has a unique submission link, which will take you to a submission portal
 * Please submit on the portal: a link to your repository and a link to a 5 minute (max) loom which explains your code and some of your design decisions
 * If possible, please submit within 4-5 days of receiving the task
-
-## Running locally
-
-Set up the database before starting the app. This creates `.env` if missing, starts Postgres 18 (Docker) and applies migrations:
-
-```bash
-npm run db:setup
-```
-
-Connect:
-
-```bash
-docker compose exec db psql -U postgres -d take_home
-```
-
-Stop it with `docker compose down`. Add `-v` to delete the data.
