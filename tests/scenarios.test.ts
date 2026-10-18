@@ -164,16 +164,13 @@ describe("integration scenarios", () => {
 		const [ticket, ...otherTickets] = await ticketsOf(formId);
 		expect(otherTickets).toStrictEqual([]);
 		expect(ticket).toMatchObject({ job_id: null, resolved_at: null, resolution: null });
-		expect(ticket.reason).toContain("email");
+		expect(ticket.reason).toBe("Validation failed: email is missing");
 		expect(blocked.jobs.map(({ type }) => type)).toStrictEqual(["process_form"]);
 		expect(await transformedRowCount()).toBe(0);
 		expect(geocode).not.toHaveBeenCalled();
 		expect(send).not.toHaveBeenCalled();
 		expect(deliver).not.toHaveBeenCalled();
-		const blockedPayload = await storedPayload(formId);
-		expect(blockedPayload).toStrictEqual(driftPayload);
-		expect(blockedPayload).toHaveProperty("work_email", email);
-		expect(blockedPayload).not.toHaveProperty("email");
+		expect(await storedPayload(formId)).toStrictEqual(driftPayload);
 
 		const originalTransform = transformModule.transform;
 		jest
@@ -195,9 +192,7 @@ describe("integration scenarios", () => {
 			{ ...ticket, resolved_at: expect.any(Date), resolution: "requeued" },
 		]);
 		expect(await countRows(pool)).toStrictEqual({ forms: 1, jobs: 3, tickets: 1 });
-		const replayedPayload = await storedPayload(formId);
-		expect(replayedPayload).toStrictEqual(driftPayload);
-		expect(replayedPayload).not.toHaveProperty("email");
+		expect(await storedPayload(formId)).toStrictEqual(driftPayload);
 	});
 
 	it("retries geocoder and email failures without repeating completed stages", async () => {
@@ -210,7 +205,6 @@ describe("integration scenarios", () => {
 		await worker.stop();
 
 		expect(status).toBe("transformed");
-		expect(jobs.map(({ type }) => type).sort()).toStrictEqual(["deliver_formbot", "process_form", "send_email"]);
 		expect(Object.fromEntries(jobs.map(({ type, attempts }) => [type, attempts]))).toStrictEqual({
 			process_form: 2,
 			send_email: 2,
