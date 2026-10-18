@@ -1,5 +1,11 @@
 
 
+## Architecture
+
+![Architecture: /ingest stores the payload; a worker validates, geocodes and saves in one transaction; outbox jobs send the email and the FORM-BOT delivery; blocked forms and dead jobs become review tickets](docs/architecture.svg)
+
+`/ingest` stores the payload and queues a durable `process_form` job. That job validates and geocodes the form, then saves the transformed form and queues separate `send_email` and `deliver_formbot` jobs in one transaction. Processing and email jobs retry; FORM-BOT failures are sent for manual review because delivery may be uncertain. Blocked forms and dead jobs become review tickets. The CLI can list, requeue and close them; the `/workers` page can requeue them.
+
 ## Retry configuration
 
 `PROCESS_FORM_MAX_ATTEMPTS` and `SEND_EMAIL_MAX_ATTEMPTS` default to 5 and must be positive safe integers. They limit all failures, including invalid or missing geocoder coordinates and unexpected errors.
