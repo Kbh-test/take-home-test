@@ -41,14 +41,14 @@ Database-backed tests use throwaway `test_<uuid>` databases. The tests themselve
 |------|--------|
 | [app.test.ts](app.test.ts) | HTTP errors on `POST /ingest`: malformed JSON, empty body, oversized body, wrong content type. |
 | [ingest.test.ts](ingest.test.ts) | Ingest storage: duplicates, conflicting versions, missing references, odd payloads, concurrency, rollback on failure. |
-| [worker.test.ts](worker.test.ts) | Job worker: claiming, retries and backoff, dead jobs and tickets, shutdown, restart recovery, worker lock. |
+| [worker.test.ts](worker.test.ts) | Job worker: claiming, retries and backoff, dead jobs and tickets with their reason codes, shutdown, restart and in-loop recovery, worker lock. |
 | [delivery.test.ts](delivery.test.ts) | Email and FORM-BOT handlers: payload shape, provider errors and redirects, provider timeouts. |
 | [process_form.test.ts](process_form.test.ts) | `processForm`: transform, geocode, queue deliveries, block invalid forms, re-runs, rollback. |
 | [pipeline.test.ts](pipeline.test.ts) | End to end: ingest, process, email and FORM-BOT delivery with a real worker. |
 | [scenarios.test.ts](scenarios.test.ts) | Integration: schema-drift replay and provider retries through the full pipeline. |
-| [cli.test.ts](cli.test.ts) | Review ticket CLI: list, requeue and close tickets, and the allowed status transitions. |
+| [cli.test.ts](cli.test.ts) | Review ticket CLI: list (including the reason-code column), requeue and close tickets, and the allowed status transitions. |
 | [server.test.ts](server.test.ts) | `startService`: startup, concurrent graceful stop and failure reporting for the API and worker. |
 | [run.test.ts](run.test.ts) | `run`: signal handling, forced exit, pool cleanup and exit codes. |
 | [transform.test.ts](transform.test.ts) | `transform()`: field mapping and the cases that block a form. |
-| [schema.test.ts](schema.test.ts) | Database schema constraints: duplicates, statuses, counters, ticket rules. |
-| [migrate.test.ts](migrate.test.ts) | Migration runner: ordering, idempotency, rollback, concurrent runs, file naming. |
+| [schema.test.ts](schema.test.ts) | Database schema constraints: duplicates, statuses, counters, ticket rules, required and allowed ticket reason codes. |
+| [migrate.test.ts](migrate.test.ts) | Migration runner: ordering, idempotency, rollback, concurrent runs, file naming, reason-code backfill and its rollback on unrecognised tickets. |

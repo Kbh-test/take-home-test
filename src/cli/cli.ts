@@ -65,6 +65,7 @@ function formatTicket(ticket: OpenTicket): string {
 		ticket.createdAt.toISOString(),
 		ticket.formId,
 		ticket.jobType ?? "form",
+		ticket.reasonCode,
 		ticket.reason.replace(/[\t\r\n]/g, " "),
 	].join("\t");
 }

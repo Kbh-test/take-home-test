@@ -51,7 +51,7 @@ describe("POST /ingest storage", () => {
 			"SELECT inbound_form_id, type, status FROM jobs",
 		);
 		const tickets = await pool.query(
-			"SELECT inbound_form_id, job_id, reason FROM dead_letters",
+			"SELECT inbound_form_id, job_id, reason_code, reason FROM dead_letters",
 		);
 		return { jobs: jobs.rows, tickets: tickets.rows };
 	};
@@ -110,6 +110,7 @@ describe("POST /ingest storage", () => {
 				{
 					inbound_form_id: blocked.id,
 					job_id: null,
+					reason_code: "reference_conflict",
 					reason: `application_reference already accepted on form ${accepted.id}`,
 				},
 			],
@@ -130,7 +131,12 @@ describe("POST /ingest storage", () => {
 		expect(await jobsAndTickets()).toEqual({
 			jobs: [],
 			tickets: [
-				{ inbound_form_id: form.id, job_id: null, reason: "Missing application_reference" },
+				{
+					inbound_form_id: form.id,
+					job_id: null,
+					reason_code: "missing_reference",
+					reason: "Missing application_reference",
+				},
 			],
 		});
 	});

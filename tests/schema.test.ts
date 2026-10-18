@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 
 import { migrate } from "../src/db/migrate";
+import type { ReasonCode } from "../src/types";
 import { connect, createCleanup, createTempDatabase } from "./helpers/db";
 
 describe("initial schema", () => {
@@ -40,10 +41,11 @@ describe("initial schema", () => {
 	const insertTicket = async (
 		formId: string,
 		jobId: string | null = null,
+		reasonCode = "job_failed",
 	): Promise<string> => {
 		const { rows } = await client.query<{ id: string }>(
-			"INSERT INTO dead_letters (inbound_form_id, job_id, reason) VALUES ($1, $2, 'test') RETURNING id",
-			[formId, jobId],
+			"INSERT INTO dead_letters (inbound_form_id, job_id, reason_code, reason) VALUES ($1, $2, $3, 'test') RETURNING id",
+			[formId, jobId, reasonCode],
 		);
 
 		return rows[0].id;
@@ -108,6 +110,35 @@ describe("initial schema", () => {
 		await expect(insertTicket(await insertForm(), jobId)).rejects.toThrow(
 			"dead_letters_job_belongs_to_form_fkey",
 		);
+	});
+
+	it("accepts every agreed ticket reason code", async () => {
+		const reasonCodes: ReasonCode[] = [
+			"missing_reference",
+			"reference_conflict",
+			"validation_failed",
+			"delivery_uncertain",
+			"job_failed",
+		];
+
+		for (const reasonCode of reasonCodes) {
+			await expect(insertTicket(await insertForm(), null, reasonCode)).resolves.toBeDefined();
+		}
+	});
+
+	it("rejects an unknown ticket reason code", async () => {
+		await expect(insertTicket(await insertForm(), null, "retry_delayed")).rejects.toThrow(
+			"dead_letters_reason_code_check",
+		);
+	});
+
+	it("requires a ticket reason code", async () => {
+		await expect(
+			client.query(
+				"INSERT INTO dead_letters (inbound_form_id, reason) VALUES ($1, 'test')",
+				[await insertForm()],
+			),
+		).rejects.toThrow('null value in column "reason_code" of relation "dead_letters"');
 	});
 
 	it("allows only one transformed row per application reference", async () => {

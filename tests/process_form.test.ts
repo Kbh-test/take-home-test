@@ -147,9 +147,10 @@ describe("processForm", () => {
 		await processForm(pool, formId, geocode);
 
 		expect(await formStatus(formId)).toBe("blocked");
-		expect((await pool.query("SELECT inbound_form_id, job_id, reason FROM dead_letters")).rows).toStrictEqual([{
+		expect((await pool.query("SELECT inbound_form_id, job_id, reason_code, reason FROM dead_letters")).rows).toStrictEqual([{
 			inbound_form_id: formId,
 			job_id: null,
+			reason_code: "validation_failed",
 			reason: "Validation failed: name must have at least two words",
 		}]);
 		expect(await findTransformedForm(pool, formId)).toBeNull();

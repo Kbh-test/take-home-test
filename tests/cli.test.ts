@@ -1,5 +1,8 @@
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { userInfo } from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import type { Pool } from "pg";
 
 import { closeTicket, listTickets, requeueTicket } from "../src/cli/commands";
@@ -7,7 +10,7 @@ import { withTransaction } from "../src/db/pool";
 import { openTicket } from "../src/db/tickets";
 import { canTransition, FORM_TRANSITIONS, JOB_TRANSITIONS } from "../src/db/transitions";
 import { ingestForm } from "../src/ingest/ingest";
-import type { FormStatus, JobStatus, JobType } from "../src/types";
+import type { FormStatus, JobStatus, JobType, ReasonCode } from "../src/types";
 import { payloadWith } from "./fixtures/form";
 import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
 
@@ -29,6 +32,12 @@ type TicketRow = {
 const { application_reference: _, ...withoutReference } = payloadWith();
 
 const conflicting = payloadWith({ name: "Jane Doe" });
+
+const execFileAsync = promisify(execFile);
+
+const TSX = path.join(__dirname, "../node_modules/.bin/tsx");
+
+const CLI = path.join(__dirname, "../src/cli/cli.ts");
 
 describe("review ticket CLI", () => {
 	const cleanup = createCleanup();
@@ -58,8 +67,12 @@ describe("review ticket CLI", () => {
 		return rows[0].id;
 	};
 
-	const addTicket = (formId: string, reason: string, jobId: string | null = null) =>
-		withTransaction(pool, (client) => openTicket(client, formId, reason, jobId));
+	const addTicket = (
+		formId: string,
+		reasonCode: ReasonCode,
+		reason: string,
+		jobId: string | null = null,
+	) => withTransaction(pool, (client) => openTicket(client, formId, reasonCode, reason, jobId));
 
 	const transformedForm = async () => {
 		const payload = payloadWith({ application_reference: `GRU-${randomUUID()}` });
@@ -88,7 +101,12 @@ describe("review ticket CLI", () => {
 		);
 		const jobId = job.rows[0].id;
 
-		await addTicket(formId, `${type} failed: Provider returned 500`, jobId);
+		await addTicket(
+			formId,
+			type === "deliver_formbot" ? "delivery_uncertain" : "job_failed",
+			`${type} failed: Provider returned 500`,
+			jobId,
+		);
 
 		return { formId, jobId, ticketId: await ticketOf(formId) };
 	};
@@ -102,7 +120,7 @@ describe("review ticket CLI", () => {
 			"UPDATE jobs SET status = $2, attempts = 1 WHERE inbound_form_id = $1",
 			[formId, jobStatus],
 		);
-		await addTicket(formId, "Validation failed: name has one word");
+		await addTicket(formId, "validation_failed", "Validation failed: name has one word");
 
 		return { formId, ticketId: await ticketOf(formId) };
 	};
@@ -198,6 +216,7 @@ describe("review ticket CLI", () => {
 				createdAt: expect.any(Date),
 				formId: email.formId,
 				jobType: "send_email",
+				reasonCode: "job_failed",
 				reason: "send_email failed: Provider returned 500",
 			},
 			{
@@ -205,8 +224,37 @@ describe("review ticket CLI", () => {
 				createdAt: expect.any(Date),
 				formId: missing.formId,
 				jobType: null,
+				reasonCode: "missing_reference",
 				reason: "Missing application_reference",
 			},
+		]);
+	});
+
+	it("prints the reason code after the job type in list output", async () => {
+		const missing = await missingReferenceTicket();
+		const delivery = await insertJobTicket("deliver_formbot");
+
+		const { stdout } = await execFileAsync(TSX, [CLI, "list"], {
+			env: { ...process.env, DATABASE_URL: pool.options.connectionString },
+		});
+
+		expect(stdout.trimEnd().split("\n").map((line) => line.split("\t"))).toEqual([
+			[
+				missing.ticketId,
+				expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+				missing.formId,
+				"form",
+				"missing_reference",
+				"Missing application_reference",
+			],
+			[
+				delivery.ticketId,
+				expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+				delivery.formId,
+				"deliver_formbot",
+				"delivery_uncertain",
+				"deliver_formbot failed: Provider returned 500",
+			],
 		]);
 	});
 
@@ -295,7 +343,7 @@ describe("review ticket CLI", () => {
 	it("refuses a job ticket whose job is done, even for process_form", async () => {
 		const { formId, processJobId } = await transformedForm();
 
-		await addTicket(formId, "process_form failed: Provider returned 500", processJobId);
+		await addTicket(formId, "job_failed", "process_form failed: Provider returned 500", processJobId);
 		const ticketId = await ticketOf(formId);
 		const before = await snapshot();
 

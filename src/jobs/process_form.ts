@@ -66,7 +66,12 @@ export async function processForm(
 				return;
 			}
 
-			await openTicket(client, inboundFormId, `Validation failed: ${result.reason}`);
+			await openTicket(
+				client,
+				inboundFormId,
+				"validation_failed",
+				`Validation failed: ${result.reason}`,
+			);
 		});
 		return;
 	}

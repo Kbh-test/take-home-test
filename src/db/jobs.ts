@@ -63,7 +63,13 @@ export function killJob(pool: Pool, job: Job, error: string): Promise<boolean> {
 			return false;
 		}
 
-		await openTicket(client, job.inboundFormId, `${job.type} failed: ${error}`, job.id);
+		await openTicket(
+			client,
+			job.inboundFormId,
+			job.type === "deliver_formbot" ? "delivery_uncertain" : "job_failed",
+			`${job.type} failed: ${error}`,
+			job.id,
+		);
 		return true;
 	});
 }
@@ -81,8 +87,8 @@ export function recoverJobs(pool: Pool): Promise<void> {
 				WHERE status = 'running' AND type = 'deliver_formbot'
 				RETURNING id, inbound_form_id
 			)
-			INSERT INTO dead_letters (inbound_form_id, job_id, reason)
-			SELECT inbound_form_id, id, $1 FROM interrupted`,
+			INSERT INTO dead_letters (inbound_form_id, job_id, reason_code, reason)
+			SELECT inbound_form_id, id, 'delivery_uncertain', $1 FROM interrupted`,
 			[INTERRUPTED_DELIVERY],
 		);
 	});

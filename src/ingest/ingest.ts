@@ -30,7 +30,7 @@ export function ingestForm(pool: Pool, payload: unknown): Promise<void> {
 		}
 
 		if (!reference) {
-			await openTicket(client, formId, "Missing application_reference");
+			await openTicket(client, formId, "missing_reference", "Missing application_reference");
 			return;
 		}
 
@@ -44,6 +44,7 @@ export function ingestForm(pool: Pool, payload: unknown): Promise<void> {
 			await openTicket(
 				client,
 				formId,
+				"reference_conflict",
 				`application_reference already accepted on form ${conflictId}`,
 			);
 			return;

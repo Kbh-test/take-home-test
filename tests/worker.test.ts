@@ -78,7 +78,7 @@ describe("worker", () => {
 	};
 
 	const tickets = async () => {
-		const { rows } = await pool.query("SELECT inbound_form_id, job_id, reason FROM dead_letters");
+		const { rows } = await pool.query("SELECT inbound_form_id, job_id, reason_code, reason FROM dead_letters");
 		return rows;
 	};
 
@@ -161,19 +161,31 @@ describe("worker", () => {
 		});
 		expect(sendEmail).toHaveBeenCalledTimes(MAX_ATTEMPTS.send_email);
 		expect(await tickets()).toEqual([
-			{ inbound_form_id: formId, job_id: jobId, reason: "send_email failed: Provider returned 500" },
+			{
+				inbound_form_id: formId,
+				job_id: jobId,
+				reason_code: "job_failed",
+				reason: "send_email failed: Provider returned 500",
+			},
 		]);
 	});
 
 	it("never retries a failed FORM-BOT delivery", async () => {
-		const { jobId } = await insertJob("deliver_formbot");
+		const { formId, jobId } = await insertJob("deliver_formbot");
 		const formBot = mockHandler().mockRejectedValue(providerError);
 
 		await start({ deliver_formbot: formBot });
 
 		await waitForStatus(jobId, "dead");
 		expect(formBot).toHaveBeenCalledTimes(1);
-		expect(await tickets()).toHaveLength(1);
+		expect(await tickets()).toEqual([
+			{
+				inbound_form_id: formId,
+				job_id: jobId,
+				reason_code: "delivery_uncertain",
+				reason: "deliver_formbot failed: Provider returned 500",
+			},
+		]);
 	});
 
 	it("stores a generic message instead of an unexpected error's text", async () => {
@@ -188,7 +200,10 @@ describe("worker", () => {
 			last_error: "Unexpected error; see worker logs",
 		});
 		expect(await tickets()).toMatchObject([
-			{ reason: "deliver_formbot failed: Unexpected error; see worker logs" },
+			{
+				reason_code: "delivery_uncertain",
+				reason: "deliver_formbot failed: Unexpected error; see worker logs",
+			},
 		]);
 	});
 
@@ -307,6 +322,7 @@ describe("worker", () => {
 			{
 				inbound_form_id: delivery.formId,
 				job_id: delivery.jobId,
+				reason_code: "delivery_uncertain",
 				reason: "deliver_formbot was interrupted before its result was saved; check FORM-BOT before requeueing",
 			},
 		]);
@@ -328,6 +344,32 @@ describe("worker", () => {
 
 		expect(await waitForStatus(jobId, "done")).toMatchObject({ attempts: 2 });
 		expect(sendEmail).toHaveBeenCalledTimes(2);
+	});
+
+	it("opens a delivery_uncertain ticket when in-loop recovery finds a running FORM-BOT job", async () => {
+		const { formId, jobId } = await insertJob("deliver_formbot");
+		const formBot = mockHandler();
+		let failed = false;
+
+		beforeQuery("SET status = 'done'", async () => {
+			if (!failed) {
+				failed = true;
+				throw new Error("connection reset");
+			}
+		});
+
+		await start({ deliver_formbot: formBot });
+
+		expect(await waitForStatus(jobId, "dead")).toMatchObject({ attempts: 1, locked_at: null });
+		expect(formBot).toHaveBeenCalledTimes(1);
+		expect(await tickets()).toEqual([
+			{
+				inbound_form_id: formId,
+				job_id: jobId,
+				reason_code: "delivery_uncertain",
+				reason: "deliver_formbot was interrupted before its result was saved; check FORM-BOT before requeueing",
+			},
+		]);
 	});
 
 	it("does not start while another worker holds the lock", async () => {

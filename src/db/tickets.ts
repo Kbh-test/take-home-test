@@ -1,23 +1,24 @@
 import type { ClientBase, Pool } from "pg";
 
-import type { FormStatus, OpenTicket } from "../types";
+import type { FormStatus, OpenTicket, ReasonCode } from "../types";
 
 export async function openTicket(
 	client: ClientBase,
 	formId: string,
+	reasonCode: ReasonCode,
 	reason: string,
 	jobId: string | null = null,
 ): Promise<void> {
 	await client.query(
-		"INSERT INTO dead_letters (inbound_form_id, job_id, reason) VALUES ($1, $2, $3)",
-		[formId, jobId, reason],
+		"INSERT INTO dead_letters (inbound_form_id, job_id, reason_code, reason) VALUES ($1, $2, $3, $4)",
+		[formId, jobId, reasonCode, reason],
 	);
 }
 
 export async function listOpenTickets(pool: Pool): Promise<OpenTicket[]> {
 	const { rows } = await pool.query<OpenTicket>(
 		`SELECT d.id, d.created_at AS "createdAt", d.inbound_form_id AS "formId",
-			j.type AS "jobType", d.reason
+			j.type AS "jobType", d.reason_code AS "reasonCode", d.reason
 		FROM dead_letters d
 		LEFT JOIN jobs j ON j.id = d.job_id
 		WHERE d.resolved_at IS NULL

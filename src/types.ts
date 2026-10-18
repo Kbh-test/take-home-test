@@ -62,11 +62,19 @@ export type JobStatus = "pending" | "running" | "done" | "dead";
 
 export type FormStatus = "received" | "transformed" | "blocked";
 
+export type ReasonCode =
+	| "missing_reference"
+	| "reference_conflict"
+	| "validation_failed"
+	| "delivery_uncertain"
+	| "job_failed";
+
 export type OpenTicket = {
 	id: string;
 	createdAt: Date;
 	formId: string;
 	jobType: JobType | null;
+	reasonCode: ReasonCode;
 	reason: string;
 };
 

@@ -118,11 +118,12 @@ describe("integration scenarios", () => {
 		const { rows } = await pool.query<{
 			id: string;
 			job_id: string | null;
+			reason_code: string;
 			reason: string;
 			resolved_at: Date | null;
 			resolution: string | null;
 		}>(
-			"SELECT id, job_id, reason, resolved_at, resolution FROM dead_letters WHERE inbound_form_id = $1 ORDER BY id",
+			"SELECT id, job_id, reason_code, reason, resolved_at, resolution FROM dead_letters WHERE inbound_form_id = $1 ORDER BY id",
 			[formId],
 		);
 		return rows;
@@ -148,6 +149,7 @@ describe("integration scenarios", () => {
 		const [ticket, ...otherTickets] = await ticketsOf(formId);
 		expect(otherTickets).toStrictEqual([]);
 		expect(ticket).toMatchObject({ job_id: null, resolved_at: null, resolution: null });
+		expect(ticket.reason_code).toBe("validation_failed");
 		expect(ticket.reason).toBe("Validation failed: email is missing");
 		expect(blocked.jobs.map(({ type }) => type)).toStrictEqual(["process_form"]);
 		expect(await transformedRowCount()).toBe(0);
