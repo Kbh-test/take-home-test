@@ -1,19 +1,9 @@
-import type { ClientBase, Pool } from "pg";
+import type { Pool } from "pg";
 
 import { withTransaction } from "../db/pool";
 import { lockReferenceAndFindConflict } from "../db/reference_conflict";
+import { openTicket } from "../db/tickets";
 import { extractReference } from "../forms/reference";
-
-async function openTicket(
-	client: ClientBase,
-	formId: string,
-	reason: string,
-): Promise<void> {
-	await client.query(
-		"INSERT INTO dead_letters (inbound_form_id, reason) VALUES ($1, $2)",
-		[formId, reason],
-	);
-}
 
 export function ingestForm(pool: Pool, payload: unknown): Promise<void> {
 	const reference = extractReference(payload);

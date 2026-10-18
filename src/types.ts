@@ -48,21 +48,11 @@ export type TransformResult =
 			reason: string;
 	  };
 
-export type TransformedFormRow = {
-	application_reference: string;
-	session_id: string;
-	first_name: string;
-	last_name: string;
-	email: string;
-	gender: TransformedFormSchema["gender"];
-	date_of_birth: string;
-	phone_number: string | null;
-	mobile_number: string;
-	address_line_1: string;
-	address_line_2: string;
-	address_line_3: string | null;
-	postcode: string;
-	country: string;
-	latitude: number;
-	longitude: number;
+export type JobType = "process_form" | "send_email" | "deliver_formbot";
+
+export type Job = {
+	id: string;
+	inboundFormId: string;
+	type: JobType;
+	attempts: number;
 };

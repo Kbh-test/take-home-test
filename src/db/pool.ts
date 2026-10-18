@@ -2,8 +2,16 @@ import { Pool, type PoolClient } from "pg";
 
 import { databaseUrl } from "./config";
 
+export const DB_TIMEOUTS = {
+	connectionTimeoutMillis: 5_000,
+	statement_timeout: 10_000,
+};
+
 export function createPool(connectionString: string = databaseUrl()): Pool {
-	const pool = new Pool({ connectionString });
+	const pool = new Pool({
+		connectionString,
+		...DB_TIMEOUTS,
+	});
 
 	pool.on("error", (error) => {
 		console.error("Idle database client error:", error.message);

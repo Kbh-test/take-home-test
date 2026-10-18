@@ -1,7 +1,9 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import type { Pool } from "pg";
 
 import type { TransformedFormSchema } from "../src/forms/schemas/transformed_schema";
 import { deliverToFormBot } from "../src/jobs/deliver_formbot";
+import { callProvider, JobError } from "../src/jobs/provider";
 import { sendFormEmail } from "../src/jobs/send_email";
 import type { deliverForm } from "../src/providers/formbot";
 import type { sendEmail } from "../src/providers/sendgrid";
@@ -61,7 +63,7 @@ describe("delivery handlers", () => {
 			from: "forms@healthtech-1.example",
 			subject: `Form ingested: ${storedForm.applicationReference}`,
 			body: `Application ${storedForm.applicationReference} was ingested.`,
-		}]]);
+		}, expect.any(AbortSignal)]]);
 	});
 
 	it("delivers the complete form with numeric coordinates, UTC date and undefined optional fields", async () => {
@@ -70,7 +72,7 @@ describe("delivery handlers", () => {
 		expect(deliver.mock.calls).toStrictEqual([[{
 			idempotencyKey: inboundFormId,
 			form: storedForm,
-		}]]);
+		}, expect.any(AbortSignal)]]);
 		expect(deliver.mock.calls[0][0].form.dateOfBirth.toISOString()).toBe("1990-01-01T00:00:00.000Z");
 	});
 
@@ -151,5 +153,25 @@ describe("delivery handlers", () => {
 			new Error("Transformed form not found"),
 		);
 		expect(deliver).not.toHaveBeenCalled();
+	});
+});
+
+describe("callProvider", () => {
+	it("turns a provider that outlives its timeout into a JobError and cancels the request", async () => {
+		let aborted = false;
+
+		const call = callProvider(
+			"SendGrid",
+			(signal) => {
+				signal.addEventListener("abort", () => {
+					aborted = true;
+				});
+				return sleep(10_000, { statusCode: 200 }, { signal });
+			},
+			20,
+		);
+
+		await expect(call).rejects.toEqual(new JobError("SendGrid timed out after 20ms"));
+		expect(aborted).toBe(true);
 	});
 });

@@ -1,13 +1,13 @@
-import { HttpResponse } from "./httpresponse";
+import type { HttpResponse } from "./httpresponse";
+import { simulateRequest } from "./simulate";
+import type { Coordinates } from "./types";
 
-export const lookupPostcode = async (postcode: string): Promise<HttpResponse<{ longitude: number; latitude: number }>> => {
-	// Generate a random number between 0 and 1
-	const randomNumber = Math.random();
+export const lookupPostcode = async (
+	_postcode: string,
+	signal?: AbortSignal,
+): Promise<HttpResponse<Coordinates>> => {
+	const success = await simulateRequest(signal);
 
-	// Simulating an asynchronous operation, e.g., looking up a postcode
-	await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const success = randomNumber < 0.95;
 	return {
 		statusCode: success ? 200 : 500,
 		body: success ? { longitude: 50.05, latitude: -5.05 } : undefined,

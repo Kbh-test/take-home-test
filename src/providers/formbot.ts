@@ -1,15 +1,11 @@
-import type { TransformedFormSchema } from "../forms/schemas/transformed_schema";
 import type { HttpResponse } from "./httpresponse";
+import { simulateRequest } from "./simulate";
+import type { FormBotDelivery } from "./types";
 
-export const deliverForm = async ({ idempotencyKey, form }: {
-	idempotencyKey: string;
-	form: TransformedFormSchema;
-}): Promise<HttpResponse<void>> => {
-	const randomNumber = Math.random();
-
-	await new Promise((resolve) => setTimeout(resolve, 1000));
-	return {
-		statusCode: randomNumber < 0.95 ? 200 : 500,
-		body: undefined,
-	};
-};
+export const deliverForm = async (
+	_delivery: FormBotDelivery,
+	signal?: AbortSignal,
+): Promise<HttpResponse<void>> => ({
+	statusCode: (await simulateRequest(signal)) ? 200 : 500,
+	body: undefined,
+});

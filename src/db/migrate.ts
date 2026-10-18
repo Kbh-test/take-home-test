@@ -3,10 +3,9 @@ import path from "node:path";
 import { Client } from "pg";
 
 import { databaseUrl } from "./config";
+import { MIGRATION_LOCK_ID } from "./locks";
 
 export const MIGRATIONS_DIR = path.join(__dirname, "migrations");
-
-const MIGRATION_LOCK_ID = 7_294_015_001;
 
 const MIGRATION_FILENAME_PATTERN = /^\d{3}_[a-z0-9_]+\.sql$/;
 
