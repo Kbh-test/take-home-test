@@ -1,6 +1,6 @@
-import type { Pool } from "pg";
+import type { ClientBase, Pool } from "pg";
 
-import type { Job } from "../types";
+import type { Job, JobStatus, JobType } from "../types";
 import { withTransaction } from "./pool";
 import { openTicket } from "./tickets";
 
@@ -86,4 +86,52 @@ export function recoverJobs(pool: Pool): Promise<void> {
 			[INTERRUPTED_DELIVERY],
 		);
 	});
+}
+
+type LockedJob = { type: JobType; status: JobStatus };
+
+export async function lockJob(client: ClientBase, jobId: string): Promise<LockedJob> {
+	const { rows } = await client.query<LockedJob>(
+		"SELECT type, status FROM jobs WHERE id = $1 FOR UPDATE",
+		[jobId],
+	);
+
+	return rows[0];
+}
+
+export async function lockProcessFormJob(
+	client: ClientBase,
+	formId: string,
+): Promise<Pick<LockedJob, "status"> | null> {
+	const { rows } = await client.query<Pick<LockedJob, "status">>(
+		"SELECT status FROM jobs WHERE inbound_form_id = $1 AND type = 'process_form' FOR UPDATE",
+		[formId],
+	);
+
+	return rows[0] ?? null;
+}
+
+export async function requeueDeadJob(client: ClientBase, jobId: string): Promise<boolean> {
+	const { rowCount } = await client.query(
+		`UPDATE jobs SET status = 'pending', attempts = 0, run_after = now(), locked_at = NULL
+		WHERE id = $1 AND status = 'dead'`,
+		[jobId],
+	);
+
+	return rowCount === 1;
+}
+
+export async function scheduleProcessFormJob(
+	client: ClientBase,
+	formId: string,
+): Promise<boolean> {
+	const { rowCount } = await client.query(
+		`INSERT INTO jobs (inbound_form_id, type) VALUES ($1, 'process_form')
+		ON CONFLICT (inbound_form_id, type) DO UPDATE
+		SET status = 'pending', attempts = 0, run_after = now(), locked_at = NULL
+		WHERE jobs.status IN ('dead', 'done')`,
+		[formId],
+	);
+
+	return rowCount === 1;
 }

@@ -56,3 +56,15 @@ export type Job = {
 	type: JobType;
 	attempts: number;
 };
+
+export type JobStatus = "pending" | "running" | "done" | "dead";
+
+export type FormStatus = "received" | "transformed" | "blocked";
+
+export type OpenTicket = {
+	id: string;
+	createdAt: Date;
+	formId: string;
+	jobType: JobType | null;
+	reason: string;
+};

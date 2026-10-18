@@ -9,6 +9,7 @@
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "db:setup": "([ -f .env ] || cp .env.example .env) && docker compose up -d --wait && npm run db:migrate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "cli": "tsx --env-file-if-exists=.env src/cli/cli.ts",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest"
   },
   "keywords": [],
