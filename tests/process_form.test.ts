@@ -2,15 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
 import { findTransformedForm } from "../src/db/transformed_forms";
-import { ingestForm } from "../src/ingest/ingest";
 import { processForm } from "../src/jobs/process_form";
 import { JobError } from "../src/jobs/provider";
 import type { lookupPostcode } from "../src/providers/idealpostcodes";
 import type { FormStatus } from "../src/types";
-import { otherExamples, payloadWith, transformedWith } from "./fixtures/form";
-import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
-
-const coordinates = { latitude: -5.05, longitude: 50.05 };
+import { coordinates, otherExamples, payloadWith, transformedWith } from "./fixtures/form";
+import { countRows, createCleanup, createMigratedPool, ingestAndGetId } from "./helpers/db";
 
 describe("processForm", () => {
 	const cleanup = createCleanup();
@@ -23,15 +20,6 @@ describe("processForm", () => {
 	});
 
 	afterEach(() => cleanup.run());
-
-	const ingest = async (payload: unknown): Promise<string> => {
-		await ingestForm(pool, payload);
-		const { rows } = await pool.query<{ id: string }>(
-			"SELECT id FROM inbound_forms WHERE payload_hash = payload_sha256($1::jsonb)",
-			[JSON.stringify(payload)],
-		);
-		return rows[0].id;
-	};
 
 	const snapshot = async () => {
 		const forms = await pool.query("SELECT * FROM inbound_forms ORDER BY id");
@@ -59,7 +47,7 @@ describe("processForm", () => {
 	};
 
 	it("saves the transformed form with coordinates and queues one email and one FORM-BOT delivery", async () => {
-		const formId = await ingest(payloadWith());
+		const formId = await ingestAndGetId(pool, payloadWith());
 		const [processJob] = await jobsOf(formId);
 
 		await processForm(pool, formId, geocode);
@@ -77,7 +65,7 @@ describe("processForm", () => {
 	});
 
 	it("maps person_two with a middle name, other gender and no third address line", async () => {
-		const formId = await ingest(otherExamples.personTwo);
+		const formId = await ingestAndGetId(pool, otherExamples.personTwo);
 
 		await processForm(pool, formId, geocode);
 
@@ -101,7 +89,7 @@ describe("processForm", () => {
 	});
 
 	it("maps person_three with no phone number and no third address line", async () => {
-		const formId = await ingest(otherExamples.personThree);
+		const formId = await ingestAndGetId(pool, otherExamples.personThree);
 
 		await processForm(pool, formId, geocode);
 
@@ -125,7 +113,7 @@ describe("processForm", () => {
 	});
 
 	it("blocks a form that fails validation and opens one form ticket without geocoding", async () => {
-		const formId = await ingest(payloadWith({ name: "John" }));
+		const formId = await ingestAndGetId(pool, payloadWith({ name: "John" }));
 		const jobsBefore = await jobsOf(formId);
 
 		await processForm(pool, formId, geocode);
@@ -142,7 +130,7 @@ describe("processForm", () => {
 	});
 
 	it("throws a data-free error and writes nothing when the geocoder returns 500", async () => {
-		const formId = await ingest(payloadWith());
+		const formId = await ingestAndGetId(pool, payloadWith());
 		const before = await snapshot();
 		geocode.mockResolvedValue({ statusCode: 500 });
 
@@ -154,7 +142,7 @@ describe("processForm", () => {
 	});
 
 	it("throws and writes nothing when the geocoder succeeds without coordinates", async () => {
-		const formId = await ingest(payloadWith());
+		const formId = await ingestAndGetId(pool, payloadWith());
 		const before = await snapshot();
 		geocode.mockResolvedValue({ statusCode: 200 });
 
@@ -165,7 +153,7 @@ describe("processForm", () => {
 	});
 
 	it("does nothing when re-run after the form was transformed", async () => {
-		const formId = await ingest(payloadWith());
+		const formId = await ingestAndGetId(pool, payloadWith());
 		await processForm(pool, formId, geocode);
 		const before = await snapshot();
 
@@ -176,7 +164,7 @@ describe("processForm", () => {
 	});
 
 	it("does nothing when re-run after the form was blocked", async () => {
-		const formId = await ingest(payloadWith({ name: "John" }));
+		const formId = await ingestAndGetId(pool, payloadWith({ name: "John" }));
 		await processForm(pool, formId, geocode);
 		const before = await snapshot();
 
@@ -195,7 +183,7 @@ describe("processForm", () => {
 	});
 
 	it("rolls back the status change and delivery jobs when the transformed insert fails", async () => {
-		const formId = await ingest(payloadWith());
+		const formId = await ingestAndGetId(pool, payloadWith());
 		await pool.query(
 			`INSERT INTO transformed_forms (
 				inbound_form_id, application_reference, session_id, first_name, last_name,

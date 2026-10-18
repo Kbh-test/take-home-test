@@ -1,7 +1,5 @@
-import { setTimeout as sleep } from "node:timers/promises";
 import type { Pool } from "pg";
 
-import { ingestForm } from "../src/ingest/ingest";
 import { deliverToFormBot } from "../src/jobs/deliver_formbot";
 import { processForm } from "../src/jobs/process_form";
 import { sendFormEmail } from "../src/jobs/send_email";
@@ -10,12 +8,11 @@ import type { lookupPostcode } from "../src/providers/idealpostcodes";
 import type { sendEmail } from "../src/providers/sendgrid";
 import type { FormStatus, JobStatus, JobType } from "../src/types";
 import { startWorker } from "../src/worker/worker";
-import { payloadWith, transformedWith } from "./fixtures/form";
-import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
+import { coordinates, payloadWith, transformedWith } from "./fixtures/form";
+import { countRows, createCleanup, createMigratedPool, ingestAndGetId } from "./helpers/db";
+import { waitUntil } from "./helpers/wait";
 
 type JobRow = { type: JobType; status: JobStatus; last_error: string | null };
-
-const coordinates = { latitude: -5.05, longitude: 50.05 };
 
 describe("pipeline", () => {
 	const cleanup = createCleanup();
@@ -35,24 +32,16 @@ describe("pipeline", () => {
 		return rows;
 	};
 
-	const waitForJobsDone = async (formId: string): Promise<JobRow[]> => {
-		let jobs: JobRow[] = [];
-
-		for (let i = 0; i < 200; i++) {
-			jobs = await jobsOf(formId);
-			if (jobs.length === 3 && jobs.every((job) => job.status === "done")) {
-				return jobs;
-			}
-			await sleep(25);
-		}
-
-		throw new Error(`Jobs did not finish: ${JSON.stringify(jobs)}`);
-	};
+	const waitForJobsDone = (formId: string): Promise<JobRow[]> =>
+		waitUntil(
+			() => jobsOf(formId),
+			(jobs) => jobs.length === 3 && jobs.every((job) => job.status === "done"),
+			`Jobs of form ${formId}`,
+			{ intervalMs: 25, maxAttempts: 200 },
+		);
 
 	it("ingests a form, processes it and delivers it by email and to FORM-BOT", async () => {
-		await ingestForm(pool, payloadWith());
-		const { rows } = await pool.query<{ id: string }>("SELECT id FROM inbound_forms");
-		const formId = rows[0].id;
+		const formId = await ingestAndGetId(pool, payloadWith());
 
 		const geocode: jest.MockedFunction<typeof lookupPostcode> = jest
 			.fn()

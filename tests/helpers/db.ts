@@ -4,6 +4,7 @@ import { Client, type Pool } from "pg";
 import { databaseUrl } from "../../src/db/config";
 import { migrate } from "../../src/db/migrate";
 import { createPool } from "../../src/db/pool";
+import { ingestForm } from "../../src/ingest/ingest";
 
 const ADMIN_URL = databaseUrl();
 
@@ -101,4 +102,18 @@ export async function countRows(pool: Pool): Promise<RowCounts> {
 	`);
 
 	return rows[0];
+}
+
+export async function ingestAndGetId(pool: Pool, payload: unknown): Promise<string> {
+	await ingestForm(pool, payload);
+	const { rows } = await pool.query<{ id: string }>(
+		"SELECT id FROM inbound_forms WHERE payload_hash = payload_sha256($1::jsonb)",
+		[JSON.stringify(payload)],
+	);
+
+	if (rows.length === 0) {
+		throw new Error("Fixture setup failed: ingested form not found by payload hash");
+	}
+
+	return rows[0].id;
 }

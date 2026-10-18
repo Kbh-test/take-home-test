@@ -1,10 +1,8 @@
-import { setTimeout as sleep } from "node:timers/promises";
 import type { Pool } from "pg";
 
 import { requeueTicket } from "../src/cli/commands";
 import { findTransformedForm } from "../src/db/transformed_forms";
 import * as transformModule from "../src/forms/transform";
-import { ingestForm } from "../src/ingest/ingest";
 import { deliverToFormBot } from "../src/jobs/deliver_formbot";
 import { processForm } from "../src/jobs/process_form";
 import { sendFormEmail } from "../src/jobs/send_email";
@@ -14,8 +12,9 @@ import type { sendEmail } from "../src/providers/sendgrid";
 import type { FormStatus, JobStatus, JobType } from "../src/types";
 import type { Worker } from "../src/worker/types";
 import { startWorker } from "../src/worker/worker";
-import { payloadWith } from "./fixtures/form";
-import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
+import { coordinates, payloadWith } from "./fixtures/form";
+import { countRows, createCleanup, createMigratedPool, ingestAndGetId } from "./helpers/db";
+import { waitUntil } from "./helpers/wait";
 
 type JobState = {
 	type: JobType;
@@ -29,8 +28,6 @@ type FormState = {
 	tickets: number;
 	jobs: JobState[];
 };
-
-const coordinates = { latitude: -5.05, longitude: 50.05 };
 
 const WAIT_TIMEOUT_MS = 3_000;
 
@@ -92,15 +89,6 @@ describe("integration scenarios", () => {
 		return cleanup.track(worker!, (w) => w.stop());
 	};
 
-	const ingest = async (payload: unknown): Promise<string> => {
-		await ingestForm(pool, payload);
-		const { rows } = await pool.query<{ id: string }>(
-			"SELECT id FROM inbound_forms WHERE payload_hash = payload_sha256($1::jsonb)",
-			[JSON.stringify(payload)],
-		);
-		return rows[0].id;
-	};
-
 	const formState = async (formId: string): Promise<FormState> => {
 		const form = await pool.query<{ status: FormStatus; tickets: number }>(
 			`SELECT status, (SELECT count(*)::int FROM dead_letters WHERE inbound_form_id = $1) AS tickets
@@ -115,20 +103,11 @@ describe("integration scenarios", () => {
 		return { ...form.rows[0], jobs: jobs.rows };
 	};
 
-	const waitForState = async (formId: string, reached: (state: FormState) => boolean): Promise<FormState> => {
-		const deadline = Date.now() + WAIT_TIMEOUT_MS;
-		let state = await formState(formId);
-
-		while (!reached(state)) {
-			if (Date.now() > deadline) {
-				throw new Error(`Form ${formId} did not reach the expected state; observed ${JSON.stringify(state)}`);
-			}
-			await sleep(10);
-			state = await formState(formId);
-		}
-
-		return state;
-	};
+	const waitForState = (formId: string, reached: (state: FormState) => boolean): Promise<FormState> =>
+		waitUntil(() => formState(formId), reached, `Form ${formId}`, {
+			intervalMs: 10,
+			timeoutMs: WAIT_TIMEOUT_MS,
+		});
 
 	const storedPayload = async (formId: string): Promise<unknown> => {
 		const { rows } = await pool.query("SELECT payload FROM inbound_forms WHERE id = $1", [formId]);
@@ -157,7 +136,7 @@ describe("integration scenarios", () => {
 	it("replays a schema-drift form after a mapper fix without changing its stored payload", async () => {
 		const { email, ...rest } = payloadWith();
 		const driftPayload = { ...rest, work_email: email };
-		const formId = await ingest(driftPayload);
+		const formId = await ingestAndGetId(pool, driftPayload);
 
 		const firstWorker = await start();
 		const blocked = await waitForState(
@@ -203,7 +182,7 @@ describe("integration scenarios", () => {
 	it("retries geocoder and email failures without repeating completed stages", async () => {
 		geocode.mockResolvedValueOnce({ statusCode: 500 });
 		send.mockResolvedValueOnce({ statusCode: 500 });
-		const formId = await ingest(payloadWith());
+		const formId = await ingestAndGetId(pool, payloadWith());
 
 		const worker = await start();
 		const { status, jobs } = await waitForState(formId, (state) => allJobsDone(state, 3));

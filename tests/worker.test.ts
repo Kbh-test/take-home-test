@@ -8,6 +8,7 @@ import type { Job, JobStatus, JobType } from "../src/types";
 import type { JobHandler, Worker } from "../src/worker/types";
 import { MAX_ATTEMPTS, startWorker } from "../src/worker/worker";
 import { createCleanup, createMigratedPool } from "./helpers/db";
+import { waitUntil } from "./helpers/wait";
 
 type JobRow = {
 	status: JobStatus;
@@ -81,16 +82,8 @@ describe("worker", () => {
 		return rows;
 	};
 
-	const waitForJob = async (jobId: string, matches: (row: JobRow) => boolean): Promise<JobRow> => {
-		for (let i = 0; i < 200; i++) {
-			const row = await jobRow(jobId);
-			if (matches(row)) {
-				return row;
-			}
-			await sleep(10);
-		}
-		throw new Error(`Job ${jobId} never reached the expected state`);
-	};
+	const waitForJob = (jobId: string, matches: (row: JobRow) => boolean): Promise<JobRow> =>
+		waitUntil(() => jobRow(jobId), matches, `Job ${jobId}`, { intervalMs: 10, maxAttempts: 200 });
 
 	const waitForStatus = (jobId: string, status: JobStatus) =>
 		waitForJob(jobId, (row) => row.status === status);

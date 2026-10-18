@@ -22,6 +22,8 @@ const transformed: MappedForm = {
 	country: "United Kingdom",
 };
 
+export const coordinates = { latitude: -5.05, longitude: 50.05 };
+
 export const payloadWith = (overrides: Payload = {}): Payload => ({ ...structuredClone(personOne), ...overrides });
 
 export const transformedWith = (overrides: Partial<MappedForm> = {}): MappedForm => ({ ...transformed, ...overrides });
