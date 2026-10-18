@@ -16,7 +16,7 @@ Processing and email reuse the existing exponential backoff with equal jitter ca
 
 Prerequisites:
 
-* Node.js >=22.9
+* Node.js >=22.12
 * Postgres 18
 * Docker with Compose (runs Postgres 18)
 
