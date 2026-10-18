@@ -1,10 +1,14 @@
-import app from "./app";
-import { databaseUrl } from "./db/config";
+import type { Pool } from "pg";
+
+import { createApp } from "./app";
+import { createPool } from "./db/pool";
 
 const PORT = process.env.PORT || 3000;
 
+let pool: Pool;
+
 try {
-	databaseUrl();
+	pool = createPool();
 } catch (error) {
 	console.error(
 		"Startup failed:",
@@ -13,6 +17,6 @@ try {
 	process.exit(1);
 }
 
-app.listen(PORT, () => {
+createApp(pool).listen(PORT, () => {
 	console.log(`Server is running on http://localhost:${PORT}`);
 });
