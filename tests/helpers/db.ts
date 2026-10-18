@@ -117,3 +117,20 @@ export async function ingestAndGetId(pool: Pool, payload: unknown): Promise<stri
 
 	return rows[0].id;
 }
+
+export async function jobsOf(pool: Pool, formId: string) {
+	const { rows } = await pool.query(
+		"SELECT * FROM jobs WHERE inbound_form_id = $1 ORDER BY id",
+		[formId],
+	);
+	return rows;
+}
+
+export async function snapshot(pool: Pool) {
+	const forms = await pool.query("SELECT * FROM inbound_forms ORDER BY id");
+	const jobs = await pool.query("SELECT * FROM jobs ORDER BY id");
+	const tickets = await pool.query("SELECT * FROM dead_letters ORDER BY id");
+	const transformed = await pool.query("SELECT * FROM transformed_forms ORDER BY inbound_form_id");
+
+	return { forms: forms.rows, jobs: jobs.rows, tickets: tickets.rows, transformed: transformed.rows };
+}

@@ -12,7 +12,7 @@ import { canTransition, FORM_TRANSITIONS, JOB_TRANSITIONS } from "../src/db/tran
 import { ingestForm } from "../src/ingest/ingest";
 import type { FormStatus, JobStatus, JobType, ReasonCode } from "../src/types";
 import { payloadWith } from "./fixtures/form";
-import { countRows, createCleanup, createMigratedPool } from "./helpers/db";
+import { countRows, createCleanup, createMigratedPool, snapshot } from "./helpers/db";
 
 type JobRow = {
 	status: JobStatus;
@@ -175,13 +175,6 @@ describe("review ticket CLI", () => {
 		return rows[0];
 	};
 
-	const snapshot = async () => {
-		const forms = await pool.query("SELECT * FROM inbound_forms ORDER BY id");
-		const jobs = await pool.query("SELECT * FROM jobs ORDER BY id");
-		const tickets = await pool.query("SELECT * FROM dead_letters ORDER BY id");
-		return { forms: forms.rows, jobs: jobs.rows, tickets: tickets.rows };
-	};
-
 	const requeued = {
 		resolved_at: expect.any(Date),
 		resolved_by: userInfo().username,
@@ -272,12 +265,12 @@ describe("review ticket CLI", () => {
 
 	it("refuses a dead deliver_formbot job without --confirm-not-delivered and changes nothing", async () => {
 		const { ticketId } = await insertJobTicket("deliver_formbot");
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			"verify it was not delivered, then rerun with --confirm-not-delivered",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("requeues a dead deliver_formbot job with --confirm-not-delivered", async () => {
@@ -291,20 +284,20 @@ describe("review ticket CLI", () => {
 
 	it("refuses a missing-reference form while its payload has no application_reference", async () => {
 		const { ticketId } = await missingReferenceTicket();
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow("no application_reference");
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("refuses a conflict while the other submission is accepted", async () => {
 		const { acceptedId, ticketId } = await conflictTicket();
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			`another accepted submission holds the reference (form ${acceptedId})`,
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("requeues a conflict once the other submission is blocked", async () => {
@@ -345,66 +338,66 @@ describe("review ticket CLI", () => {
 
 		await addTicket(formId, "job_failed", "process_form failed: Provider returned 500", processJobId);
 		const ticketId = await ticketOf(formId);
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			"job is done; only dead jobs can be requeued",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("refuses a job ticket whose job is running", async () => {
 		const { ticketId } = await insertJobTicket("send_email", "running");
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			"job is running; only dead jobs can be requeued",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("rolls back the form update when its process_form job is pending", async () => {
 		const { ticketId } = await blockedProcessFormTicket("pending");
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			"process_form job is pending; only dead or done process_form jobs can be reset",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("rolls back the form update when its process_form job is running", async () => {
 		const { ticketId } = await blockedProcessFormTicket("running");
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			"process_form job is running; only dead or done process_form jobs can be reset",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("refuses to requeue an already-resolved ticket", async () => {
 		const { ticketId } = await insertJobTicket("send_email");
 
 		await closeTicket(pool, ticketId, "duplicate email is fine");
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(requeueTicket(pool, ticketId)).rejects.toThrow(
 			`ticket ${ticketId} is already resolved`,
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("refuses to close an already-resolved ticket", async () => {
 		const { ticketId } = await insertJobTicket("send_email");
 
 		await requeueTicket(pool, ticketId);
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(closeTicket(pool, ticketId, "too late")).rejects.toThrow(
 			`ticket ${ticketId} is already resolved`,
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("refuses to requeue a ticket that does not exist", async () => {
@@ -419,27 +412,27 @@ describe("review ticket CLI", () => {
 
 	it("refuses to close without a note", async () => {
 		const { ticketId } = await missingReferenceTicket();
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(closeTicket(pool, ticketId, "")).rejects.toThrow(
 			"close needs a non-blank --note",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("refuses to close with a blank note", async () => {
 		const { ticketId } = await missingReferenceTicket();
-		const before = await snapshot();
+		const before = await snapshot(pool);
 
 		await expect(closeTicket(pool, ticketId, " \t\n ")).rejects.toThrow(
 			"close needs a non-blank --note",
 		);
-		expect(await snapshot()).toEqual(before);
+		expect(await snapshot(pool)).toEqual(before);
 	});
 
 	it("closes a ticket with a trimmed note and leaves its form and job untouched", async () => {
 		const { ticketId } = await insertJobTicket("deliver_formbot");
-		const { forms, jobs } = await snapshot();
+		const { forms, jobs } = await snapshot(pool);
 
 		await closeTicket(pool, ticketId, "  FORM-BOT confirmed receipt  ");
 
@@ -449,7 +442,7 @@ describe("review ticket CLI", () => {
 			resolution: "closed",
 			resolution_note: "FORM-BOT confirmed receipt",
 		});
-		const after = await snapshot();
+		const after = await snapshot(pool);
 		expect(after.forms).toEqual(forms);
 		expect(after.jobs).toEqual(jobs);
 	});
