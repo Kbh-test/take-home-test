@@ -47,8 +47,12 @@ describe("transform() blocks", () => {
 		expect(blockedReason(payloadWith({ gender: "prefer_not_to_say" }))).toBe("gender is invalid");
 	});
 
-	it.each(["13/01/1990", "1990-02-30"])("a date of birth that is not a real date: %p", (dateOfBirth) => {
-		expect(blockedReason(payloadWith({ date_of_birth: dateOfBirth }))).toBe("date_of_birth is invalid");
+	it("a date of birth in the wrong format", () => {
+		expect(blockedReason(payloadWith({ date_of_birth: "13/01/1990" }))).toBe("date_of_birth is invalid");
+	});
+
+	it("a date of birth that is not a real calendar date", () => {
+		expect(blockedReason(payloadWith({ date_of_birth: "1990-02-30" }))).toBe("date_of_birth is invalid");
 	});
 
 	it("a one-word name", () => {

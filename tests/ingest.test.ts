@@ -191,9 +191,8 @@ describe("POST /ingest storage", () => {
 		jest.spyOn(console, "error").mockImplementation(() => undefined);
 		await failInsertsInto("jobs");
 
-		const response = await post(payloadWith());
+		const response = await post(payloadWith()).expect(503);
 
-		expect(response.status).toBe(503);
 		expect(response.body).toEqual({ error: "Service unavailable, retry later" });
 		expect(await countRows(pool)).toEqual({ forms: 0, jobs: 0, tickets: 0 });
 	});
@@ -202,9 +201,8 @@ describe("POST /ingest storage", () => {
 		jest.spyOn(console, "error").mockImplementation(() => undefined);
 		await failInsertsInto("dead_letters");
 
-		const response = await post(withoutReference);
+		const response = await post(withoutReference).expect(503);
 
-		expect(response.status).toBe(503);
 		expect(response.body).toEqual({ error: "Service unavailable, retry later" });
 		expect(await countRows(pool)).toEqual({ forms: 0, jobs: 0, tickets: 0 });
 	});
