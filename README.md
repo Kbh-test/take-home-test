@@ -26,11 +26,7 @@ npm run dev                  # watch mode
 npm run build && npm start   # compiled
 ```
 
-Run the tests (Postgres must be running):
-
-```bash
-npm test
-```
+Tests: see [tests/README.md](tests/README.md) for how to run them and how the tests cover each resilience scenario.
 
 Connect:
 
