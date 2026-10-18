@@ -22,7 +22,7 @@ const transformed: MappedForm = {
 	country: "United Kingdom",
 };
 
-export const coordinates = { latitude: -5.05, longitude: 50.05 };
+export const coordinates = { latitude: 51.5416, longitude: -0.0034 };
 
 export const payloadWith = (overrides: Payload = {}): Payload => ({ ...structuredClone(personOne), ...overrides });
 

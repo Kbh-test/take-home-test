@@ -5,6 +5,7 @@ import { openTicket } from "../db/tickets";
 import { insertTransformedForm } from "../db/transformed_forms";
 import { transform } from "../forms/transform";
 import { lookupPostcode } from "../providers/idealpostcodes";
+import type { Coordinates } from "../providers/types";
 import type { FormStatus } from "../types";
 import { callProvider, JobError } from "./provider";
 
@@ -12,6 +13,17 @@ type InboundFormRow = {
 	payload: unknown;
 	status: FormStatus;
 };
+
+const UK_BOUNDS = { minLatitude: 49.1, maxLatitude: 60.9, minLongitude: -8.7, maxLongitude: 1.8 };
+
+function isInUk({ latitude, longitude }: Coordinates): boolean {
+	return (
+		latitude >= UK_BOUNDS.minLatitude &&
+		latitude <= UK_BOUNDS.maxLatitude &&
+		longitude >= UK_BOUNDS.minLongitude &&
+		longitude <= UK_BOUNDS.maxLongitude
+	);
+}
 
 export async function processForm(
 	pool: Pool,
@@ -57,6 +69,10 @@ export async function processForm(
 
 	if (!coordinates) {
 		throw new JobError("Geocoder returned no coordinates");
+	}
+
+	if (!isInUk(coordinates)) {
+		console.warn(`Form ${inboundFormId}: geocoder returned coordinates outside the UK.`);
 	}
 
 	await withTransaction(pool, async (client) => {

@@ -19,7 +19,10 @@ describe("processForm", () => {
 		geocode = jest.fn().mockResolvedValue({ statusCode: 200, body: coordinates });
 	});
 
-	afterEach(() => cleanup.run());
+	afterEach(async () => {
+		await cleanup.run();
+		jest.restoreAllMocks();
+	});
 
 	const snapshot = async () => {
 		const forms = await pool.query("SELECT * FROM inbound_forms ORDER BY id");
@@ -110,6 +113,31 @@ describe("processForm", () => {
 			country: "United Kingdom",
 			...coordinates,
 		});
+	});
+
+	it("warns, without the coordinates, when the geocoder returns a location outside the UK and still processes the form", async () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+		const outsideUk = { latitude: -5.05, longitude: 50.05 };
+		geocode.mockResolvedValue({ statusCode: 200, body: outsideUk });
+		const formId = await ingestAndGetId(pool, payloadWith());
+
+		await processForm(pool, formId, geocode);
+
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith(`Form ${formId}: geocoder returned coordinates outside the UK.`);
+		expect(await formStatus(formId)).toBe("transformed");
+		expect(await findTransformedForm(pool, formId)).toMatchObject(outsideUk);
+		expect(await countRows(pool)).toEqual({ forms: 1, jobs: 3, tickets: 0 });
+	});
+
+	it("does not warn when the geocoder returns a location in the UK", async () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+		const formId = await ingestAndGetId(pool, payloadWith());
+
+		await processForm(pool, formId, geocode);
+
+		expect(warn).not.toHaveBeenCalled();
+		expect(await formStatus(formId)).toBe("transformed");
 	});
 
 	it("blocks a form that fails validation and opens one form ticket without geocoding", async () => {
